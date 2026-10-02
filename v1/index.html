@@ -1,0 +1,1916 @@
+<!doctype html>
+<!--
+================================================================================
+ INVENTION FOUNDRY -- architecture map (read this first)
+================================================================================
+ WHAT THIS FILE IS
+ A single, offline-capable HTML file that walks a person, or a classroom, or
+ an institutional team, through turning a fuzzy problem into a documented,
+ tested invention concept, and separately helps a teacher, facilitator or
+ policy team adopt the same discipline for a group. Nothing here calls home:
+ every byte of project data stays in this browser's IndexedDB unless the
+ person explicitly exports it.
+
+ ZERO-HARM / ANTI-INVERSION (see also the visible note in the page footer)
+ Invention is treated as stewardship, not conquest. No feature in this file
+ is allowed to: (a) hide costs or risks by shifting them onto people who are
+ not in the room, (b) manufacture urgency, shame or comparison to drive
+ engagement, or (c) collect data the person cannot see, export or delete on
+ their own. If a future edit would need to violate any of those three to
+ work, the right fix is to remove the feature, not to keep it.
+
+ HOW THE FILE IS ORGANIZED (search for a bracketed tag to jump to that part)
+   [HEAD/CSS]         Design tokens, layout, components, motion, print, a11y.
+   [SPLASH]           A short, skippable, reduced-motion-aware entrance.
+   [PARALLAX-INTRO]   Three short scroll beats: why this exists, who it is
+                      for, and the stewardship commitment, ahead of the tool.
+   [DASHBOARD]        Hero plus live metrics for the current project.
+   [SECTIONS 01-13]   The invention pipeline itself, Problem through Backup.
+   [FACILITATOR]      Section 14, running this with a class, team or agency.
+   [SIDEBAR-HUD]      Maturity bar, constellation state visualizer, badges.
+   [SCRIPT: STATE]    DEFAULT_STATE, the IndexedDB wrapper, save and load.
+   [SCRIPT: I18N]     English/French text tables and the language switch.
+   [SCRIPT: HUD]      Milestone badges: encouragement only, never pressure.
+   [SCRIPT: STARS]    Constellation renderer and the ambient starfield.
+   [SCRIPT: INSIGHTS] Opt-in, local-only, resettable usage counts.
+   [SCRIPT: PIPELINE] Logic for the 13 tool sections (mostly unchanged).
+
+ EXTENDING THIS FILE
+   - New language: add a column to STATIC_TEXT/DYNAMIC_TEXT in [SCRIPT:
+     I18N]. Anything left untranslated falls back to English silently.
+   - New badge: add one entry to MILESTONES in [SCRIPT: HUD] with a pure
+     function of `state` returning true or false. No new markup needed.
+   - New pipeline section: copy an existing <section class="section">
+     block, give it a unique id and data-search keywords, add a nav link,
+     and optionally fold its own signal into completion().
+
+ EXPECTED OUTCOME
+ Opened from a server, or straight from disk over file colon slash slash,
+ with JavaScript enabled, this file should load in well under a second,
+ remember everything typed into it the next time it opens in the same
+ browser, print a clean black-and-white dossier, and never make a network
+ request on its own.
+================================================================================
+-->
+<html lang="en" data-theme="dark" data-lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<meta name="description" content="Invention Foundry — a private, offline-capable single-file operating system for turning problems into testable inventions.">
+<title>Invention Foundry — Innovate • Test • Evidence • Iterate</title>
+<noscript><style>/* With JavaScript off nothing could ever dismiss the splash, so never show it. */#splash{display:none!important}</style></noscript>
+<script>
+/* Runs synchronously, before first paint, so a returning visitor never
+   sees a flash of the wrong theme while IndexedDB (which is asynchronous)
+   loads. This is the ONLY thing localStorage is used for in this file --
+   a tiny mirror of two explicit choices (theme, language). The source of
+   truth for project data and every setting is always IndexedDB; see DB and
+   the ui/insights fields of DEFAULT_STATE in [SCRIPT: STATE]. With no
+   explicit choice stored, the theme follows the visitor's system setting. */
+(function(){
+  var root=document.documentElement, theme=null, lang=null;
+  try{ theme=localStorage.getItem('if-theme'); lang=localStorage.getItem('if-lang'); }catch(e){/* storage disabled: defaults apply, nothing else depends on this */}
+  if(theme!=='light'&&theme!=='dark'){
+    try{ theme=matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'; }catch(e){ theme='dark'; }
+  }
+  root.dataset.theme=theme;
+  if(lang==='en'||lang==='fr'){ root.lang=lang; root.dataset.lang=lang; }
+})();
+</script>
+<style>
+:root{
+  --bg:#071019;--panel:#0d1723;--panel2:#111f2e;--ink:#ecf6ff;--muted:#9fb4c8;--line:#23374a;
+  --accent:#7ee7ff;--accent2:#b99cff;--good:#8ce99a;--warn:#ffd166;--bad:#ff7b7b;
+  --shadow:0 18px 44px rgba(0,0,0,.25);--radius:18px;--radius-sm:12px;--max:1500px;
+  --sidebar:300px;--header:64px;
+}
+html[data-theme="light"]{
+  --bg:#eef5fb;--panel:#fff;--panel2:#f7fbff;--ink:#132331;--muted:#536b7d;--line:#cfe0ec;
+  --accent:#006d81;--accent2:#6b55d8;--good:#217a3c;--warn:#9b6500;--bad:#b42e2e;
+  --shadow:0 18px 44px rgba(23,50,70,.13);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:
+  radial-gradient(circle at 10% -10%, color-mix(in srgb,var(--accent) 13%,transparent), transparent 34rem),
+  radial-gradient(circle at 100% 15%, color-mix(in srgb,var(--accent2) 10%,transparent), transparent 30rem),
+  var(--bg);
+  color:var(--ink);font:16px/1.55 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+}
+button,input,textarea,select{font:inherit}
+button{cursor:pointer}
+a{color:var(--accent)}
+kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;padding:.08rem .35rem;background:var(--panel2)}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.skip{position:absolute;left:.5rem;top:-5rem;z-index:1000;padding:.7rem 1rem;background:var(--ink);color:var(--bg);border-radius:8px}
+.skip:focus{top:.5rem}
+#stars{position:fixed;inset:0;z-index:-2;opacity:.42;pointer-events:none}
+.header{
+  position:sticky;top:0;z-index:60;height:var(--header);display:flex;align-items:center;gap:.7rem;
+  padding:.55rem max(.8rem,env(safe-area-inset-left));border-bottom:1px solid var(--line);
+  background:color-mix(in srgb,var(--bg) 86%,transparent);backdrop-filter:blur(16px)
+}
+.brand{display:flex;align-items:center;gap:.7rem;min-width:0}
+.logo{
+  width:40px;height:40px;border-radius:13px;display:grid;place-items:center;font-weight:900;color:#041017;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));box-shadow:0 0 0 1px color-mix(in srgb,var(--accent) 40%,transparent)
+}
+.brandtext{min-width:0}
+.brandtext strong{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brandtext small{display:block;color:var(--muted);font-size:.72rem}
+.head-actions{margin-left:auto;display:flex;align-items:center;gap:.45rem}
+.iconbtn,.btn{
+  border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:11px;padding:.62rem .8rem;
+  box-shadow:none;transition:.18s transform,.18s border-color,.18s background
+}
+.iconbtn:hover,.btn:hover{transform:translateY(-1px);border-color:color-mix(in srgb,var(--accent) 50%,var(--line))}
+.btn.primary{background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 23%,var(--panel)),color-mix(in srgb,var(--accent2) 18%,var(--panel)));border-color:color-mix(in srgb,var(--accent) 50%,var(--line))}
+.btn.good{border-color:color-mix(in srgb,var(--good) 55%,var(--line))}
+.btn.danger{border-color:color-mix(in srgb,var(--bad) 60%,var(--line))}
+.status-pill{display:flex;align-items:center;gap:.35rem;padding:.38rem .62rem;border:1px solid var(--line);border-radius:999px;color:var(--muted);font-size:.78rem}
+.dot{width:.55rem;height:.55rem;border-radius:50%;background:var(--good);box-shadow:0 0 10px color-mix(in srgb,var(--good) 70%,transparent)}
+.shell{max-width:var(--max);margin:auto;display:grid;grid-template-columns:var(--sidebar) minmax(0,1fr);min-height:calc(100vh - var(--header))}
+.sidebar{
+  position:sticky;top:var(--header);height:calc(100vh - var(--header));overflow:auto;padding:1rem .8rem 2rem;
+  border-right:1px solid var(--line);background:color-mix(in srgb,var(--bg) 91%,transparent)
+}
+.nav-group{margin-bottom:1rem}
+.nav-group h2{font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:.35rem .65rem}
+.navlink{display:flex;align-items:center;gap:.65rem;text-decoration:none;color:var(--ink);padding:.68rem .72rem;border-radius:10px;margin:.14rem 0}
+.navlink:hover,.navlink.active{background:var(--panel2)}
+.navlink.active{outline:1px solid color-mix(in srgb,var(--accent) 38%,var(--line))}
+.navlink .num{width:1.65rem;height:1.65rem;border:1px solid var(--line);border-radius:8px;display:grid;place-items:center;font-size:.72rem;color:var(--muted)}
+.side-mini{margin:.9rem .6rem;padding:.8rem;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+.progress{height:8px;background:var(--panel2);border-radius:999px;overflow:hidden;border:1px solid var(--line)}
+.progress>span{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .25s}
+.main{min-width:0;padding:1.25rem clamp(.8rem,2vw,2rem) 5rem}
+.hero{position:relative;overflow:hidden;border:1px solid var(--line);border-radius:24px;background:linear-gradient(135deg,color-mix(in srgb,var(--panel) 96%,transparent),color-mix(in srgb,var(--panel2) 92%,transparent));padding:clamp(1.2rem,3vw,2.5rem);box-shadow:var(--shadow)}
+.hero:after{content:"";position:absolute;width:22rem;height:22rem;border-radius:50%;right:-10rem;top:-10rem;background:radial-gradient(circle,color-mix(in srgb,var(--accent2) 24%,transparent),transparent 70%)}
+.eyebrow{font-size:.76rem;text-transform:uppercase;letter-spacing:.14em;color:var(--accent);font-weight:800}
+h1,h2,h3{line-height:1.18;margin:.2em 0 .55em}
+h1{font-size:clamp(2rem,5vw,4.3rem);max-width:950px}
+h2{font-size:clamp(1.45rem,2.4vw,2.2rem)}
+h3{font-size:1.08rem}
+.hero p{max-width:920px;color:var(--muted);font-size:1.05rem}
+.hero-actions{display:flex;gap:.6rem;flex-wrap:wrap;margin-top:1rem}
+.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.7rem;margin-top:1.2rem}
+.metric{border:1px solid var(--line);border-radius:14px;padding:.85rem;background:color-mix(in srgb,var(--panel2) 76%,transparent)}
+.metric b{font-size:1.35rem;display:block}
+.metric small{color:var(--muted)}
+.section{scroll-margin-top:calc(var(--header) + 16px);margin-top:1.3rem;border:1px solid var(--line);border-radius:20px;background:var(--panel);box-shadow:var(--shadow);overflow:hidden}
+.section-head{display:flex;align-items:flex-start;gap:1rem;padding:1.15rem 1.15rem .85rem;border-bottom:1px solid var(--line)}
+.section-head .grow{flex:1}
+.section-head p{margin:.2rem 0;color:var(--muted)}
+.section-body{padding:1.15rem}
+.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:.9rem}
+.col-12{grid-column:span 12}.col-8{grid-column:span 8}.col-6{grid-column:span 6}.col-4{grid-column:span 4}.col-3{grid-column:span 3}
+.card{border:1px solid var(--line);border-radius:16px;background:var(--panel2);padding:1rem;min-width:0}
+.card h3{margin-top:0}
+label{display:block;font-weight:700;font-size:.88rem;margin-bottom:.35rem}
+.help{font-size:.8rem;color:var(--muted);font-weight:400}
+input[type="text"],input[type="url"],input[type="number"],textarea,select{
+  width:100%;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);padding:.7rem .75rem;outline:none
+}
+textarea{min-height:96px;resize:vertical}
+input:focus,textarea:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 16%,transparent)}
+.field{margin-bottom:.8rem}
+.row{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap}
+.stack{display:grid;gap:.7rem}
+.chips{display:flex;gap:.4rem;flex-wrap:wrap}
+.chip{border:1px solid var(--line);border-radius:999px;padding:.34rem .56rem;font-size:.78rem;color:var(--muted);background:var(--panel)}
+.callout{border-left:4px solid var(--accent);padding:.8rem 1rem;background:color-mix(in srgb,var(--accent) 6%,var(--panel2));border-radius:0 12px 12px 0}
+.callout.warn{border-color:var(--warn);background:color-mix(in srgb,var(--warn) 7%,var(--panel2))}
+.callout.good{border-color:var(--good);background:color-mix(in srgb,var(--good) 7%,var(--panel2))}
+.output{white-space:pre-wrap;border:1px dashed var(--line);border-radius:12px;padding:.8rem;background:var(--bg);min-height:64px;color:var(--ink)}
+.list{display:grid;gap:.55rem}
+.item{display:flex;gap:.7rem;align-items:flex-start;border:1px solid var(--line);padding:.72rem;border-radius:12px;background:var(--panel)}
+.item .content{flex:1;min-width:0}
+.item small{color:var(--muted)}
+.item button{flex:none}
+.score-row{display:grid;grid-template-columns:150px 1fr 44px;gap:.7rem;align-items:center;margin:.55rem 0}
+input[type="range"]{width:100%;accent-color:var(--accent)}
+.score-circle{width:120px;height:120px;border-radius:50%;display:grid;place-items:center;margin:auto;background:conic-gradient(var(--accent) calc(var(--score,0)*1%),var(--panel) 0);position:relative}
+.score-circle:after{content:"";position:absolute;inset:10px;border-radius:50%;background:var(--panel2)}
+.score-circle strong{z-index:1;font-size:1.6rem}
+details{border:1px solid var(--line);border-radius:12px;background:var(--panel2);padding:.65rem .8rem}
+details+details{margin-top:.6rem}
+summary{cursor:pointer;font-weight:800}
+.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:12px}
+table{width:100%;border-collapse:collapse;min-width:720px}
+th,td{padding:.65rem;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-size:.8rem;color:var(--muted);background:var(--panel2);position:sticky;top:0}
+.badge{display:inline-block;padding:.25rem .46rem;border-radius:7px;border:1px solid var(--line);font-size:.72rem}
+.badge.good{color:var(--good)}.badge.warn{color:var(--warn)}.badge.bad{color:var(--bad)}
+.morph-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.6rem}
+.morph-cell{padding:.7rem;border:1px solid var(--line);border-radius:11px;background:var(--panel)}
+.kbdhint{font-size:.78rem;color:var(--muted)}
+.toast{position:fixed;right:1rem;bottom:1rem;z-index:100;max-width:min(420px,calc(100vw - 2rem));padding:.8rem 1rem;border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:var(--shadow);display:none}
+.toast.show{display:block;animation:pop .18s ease-out}
+@keyframes pop{from{transform:translateY(8px);opacity:0}}
+.dialog{border:1px solid var(--line);border-radius:16px;background:var(--panel);color:var(--ink);box-shadow:var(--shadow);max-width:720px;width:calc(100% - 2rem)}
+.dialog::backdrop{background:rgba(0,0,0,.56);backdrop-filter:blur(3px)}
+.dialog .dialog-body{padding:1rem}
+.search-results{max-height:55vh;overflow:auto;display:grid;gap:.4rem}
+.search-hit{padding:.7rem;border:1px solid var(--line);border-radius:10px;background:var(--panel2)}
+.footer{color:var(--muted);font-size:.84rem;margin-top:1.2rem;padding:1.2rem 0 0;border-top:1px solid var(--line)}
+.mobile-only{display:none}
+@media(max-width:980px){
+  :root{--sidebar:260px}
+  .metrics{grid-template-columns:repeat(2,1fr)}
+  .col-8,.col-6,.col-4,.col-3{grid-column:span 12}
+}
+@media(max-width:760px){
+  .brandtext small,.status-pill{display:none}
+  .mobile-only{display:inline-flex}
+  .shell{display:block}
+  .sidebar{position:fixed;z-index:80;left:0;top:var(--header);width:min(88vw,320px);transform:translateX(-110%);transition:.2s;box-shadow:var(--shadow)}
+  body.nav-open .sidebar{transform:none}
+  body.nav-open:after{content:"";position:fixed;z-index:70;inset:var(--header) 0 0;background:rgba(0,0,0,.45)}
+  .main{padding:.9rem .75rem 4rem}
+  .metrics{grid-template-columns:1fr 1fr}
+  .morph-grid{grid-template-columns:1fr}
+  .score-row{grid-template-columns:110px 1fr 38px}
+}
+@media(max-width:460px){
+  .head-actions .hide-xs{display:none}
+  .metrics{grid-template-columns:1fr}
+  h1{font-size:2rem}
+}
+@media(prefers-reduced-motion:reduce){
+  *{scroll-behavior:auto!important;animation:none!important;transition:none!important}
+  #stars{display:none}
+}
+@media print{
+  #stars,#splash,#netPill,.intro,.header,.sidebar,.hero-actions,.no-print{display:none!important}
+  body{background:#fff;color:#000}
+  .shell{display:block}.main{padding:0}.section,.hero,.card{box-shadow:none;background:#fff;border-color:#bbb}
+  .section{break-inside:avoid-page}
+  details{open:open}
+  a{color:#000;text-decoration:none}
+}
+
+/* ================== [SPLASH] ==================
+   A short, skippable entrance. Auto-dismisses on its own; any keypress,
+   click or scroll skips it immediately. Entirely removed (not just
+   hidden) when the visitor's system asks for reduced motion, so nobody
+   is forced to sit through an animation they asked not to see. */
+#splash{position:fixed;inset:0;z-index:500;display:grid;place-items:center;gap:.55rem;background:var(--bg);transition:opacity .5s ease,visibility .5s ease}
+#splash.hide{opacity:0;visibility:hidden;pointer-events:none}
+.splash-mark{width:64px;height:64px;border-radius:20px;display:grid;place-items:center;font-size:2rem;font-weight:900;color:#041017;background:linear-gradient(135deg,var(--accent),var(--accent2));animation:splashPop .7s cubic-bezier(.22,1.4,.4,1) both}
+.splash-word{font-size:1.6rem;font-weight:800;letter-spacing:-.01em;opacity:0;animation:splashFade .6s ease .25s forwards}
+.splash-word b{color:var(--accent);font-weight:800}
+.splash-tag{color:var(--muted);font-size:.9rem;opacity:0;animation:splashFade .6s ease .5s forwards}
+.splash-skip{position:absolute;bottom:2rem;color:var(--muted);font-size:.74rem;opacity:0;animation:splashFade .6s ease .9s forwards}
+@keyframes splashPop{from{transform:scale(.6) rotate(-8deg);opacity:0}to{transform:scale(1) rotate(0);opacity:1}}
+@keyframes splashFade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+@media(prefers-reduced-motion:reduce){#splash{display:none}}
+
+/* ================== [PARALLAX-INTRO] ==================
+   Three short scroll beats ahead of the working tool. Each beat's
+   background wash drifts a few pixels against scroll via the --p custom
+   property (set by initParallax() in the script); the foreground content
+   never moves, so nothing here can interfere with reading. Falls back to
+   a perfectly static section if JS parallax never runs, and is switched
+   off outright under prefers-reduced-motion. */
+.intro{position:relative}
+.intro-beat{position:relative;min-height:60vh;display:flex;align-items:center;padding:clamp(1.5rem,4vw,3rem);overflow:hidden;border-radius:24px;margin-top:1.3rem;border:1px solid var(--line);background:var(--panel);box-shadow:var(--shadow)}
+.intro-beat .beat-bg{position:absolute;inset:-12% -12%;background:radial-gradient(circle at 28% 22%,color-mix(in srgb,var(--accent) 16%,transparent),transparent 60%),radial-gradient(circle at 78% 78%,color-mix(in srgb,var(--accent2) 14%,transparent),transparent 55%);transform:translateY(calc(var(--p,0) * 26px));will-change:transform}
+.intro-beat .beat-content{position:relative;max-width:760px}
+.intro-beat .beat-content p{color:var(--muted);font-size:1.02rem;max-width:66ch}
+.intro-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-top:1.3rem}
+.intro-cards .card p{color:var(--muted)}
+@media(max-width:820px){.intro-cards{grid-template-columns:1fr}.intro-beat{min-height:0}}
+@media(prefers-reduced-motion:reduce){.intro-beat .beat-bg{transform:none!important}}
+
+/* ================== [SIDEBAR-HUD] ==================
+   The constellation is an inline SVG built entirely by renderConstellation()
+   in the script -- one star per pillar of the invention record, sized and
+   lit by how filled in that pillar is, each one an <a> that jumps to its
+   section. The badge tray is a row of milestone pips; hover/focus shows the
+   milestone name via the native title attribute, so no extra tooltip
+   library is needed. */
+#constellation{width:100%;height:auto;display:block;margin-top:.5rem;overflow:visible}
+#constellation a{cursor:pointer;outline:none}
+#constellation a:focus-visible circle{stroke:var(--ink);stroke-width:1.6}
+[hidden]{display:none!important}
+#netPill{display:flex}
+#netPill .dot{background:var(--warn);box-shadow:0 0 10px color-mix(in srgb,var(--warn) 70%,transparent)}
+.attrib{margin:.9rem 0 .5rem}
+.attrib h2{font-size:1rem;margin:0 0 .35rem}
+.attrib ul{margin:.3rem 0 .6rem;padding-left:1.1rem}
+.attrib li{margin:.35rem 0;color:var(--muted);font-size:.9rem;max-width:90ch}
+.attrib li strong{color:var(--ink)}
+@media print{
+  /* The dossier's "Print / Save PDF" button sets body.print-dossier for the
+     duration of the print, so it prints the dossier and footer notes only.
+     A normal browser print (Ctrl/Cmd P) is unaffected and prints everything. */
+  body.print-dossier .main>section:not(#dossier){display:none!important}
+}
+.badge-tray{display:flex;flex-wrap:wrap;gap:.35rem;margin-top:.5rem}
+.badge-tray .pip{width:1.7rem;height:1.7rem;border-radius:8px;border:1px solid var(--line);display:grid;place-items:center;font-size:.88rem;background:var(--panel2);color:var(--muted)}
+.badge-tray .pip.on{color:#041017;background:linear-gradient(135deg,var(--accent),var(--accent2));border-color:transparent}
+.hud-stage{color:var(--accent);font-weight:700}
+
+/* ================== [FACILITATOR] ==================
+   Mostly reuses .card/.grid from the rest of the file on purpose -- a
+   facilitator reading this section should feel like it belongs to the same
+   tool, not a bolted-on brochure. */
+.agenda{margin:.4rem 0 0;padding-left:1.2rem}
+.agenda li{margin:.4rem 0;color:var(--muted)}
+.agenda li strong{color:var(--ink)}
+</style>
+</head>
+<body>
+
+<!-- ================== noscript fallback ==================
+     Honest, not decorative: this tool is an interactive workbook, so a
+     no-JavaScript visitor genuinely cannot use it. Rather than fake a
+     read-only preview, this says so plainly and explains that the page
+     is safe to allow -- it never contacts a server on its own (see the
+     architecture-map comment at the very top of this file). -->
+<noscript>
+  <div class="section" style="max-width:640px;margin:3rem auto">
+    <div class="section-body">
+      <div class="eyebrow">JavaScript is off</div>
+      <h1 style="font-size:1.6rem">Invention Foundry needs JavaScript to work</h1>
+      <p>Idea generation, scoring, the evidence ledger, search and the dossier builder all run in your browser as you type, and everything you enter stays on this device. Without JavaScript you can still read the structure of the workbook below, but nothing can be scored, saved, searched or exported, and we won't pretend otherwise with a fake preview.</p>
+      <p><strong>To use it:</strong> turn on JavaScript for this page in your browser settings, then reload.</p>
+      <p class="help">It is safe to allow. This file never contacts a server on its own and contains no trackers; you can read exactly what it does in its source.</p>
+    </div>
+  </div>
+</noscript>
+
+<!-- ================== [SPLASH] ==================
+     Controlled by initSplash() in the script: auto-dismisses on its own
+     after a moment, or immediately on any keypress, click or scroll, and
+     is removed from the DOM entirely (not just hidden) once dismissed. -->
+<div id="splash" aria-hidden="true">
+  <div class="splash-mark">⚙</div>
+  <div class="splash-word">Invention <b>Foundry</b></div>
+  <div class="splash-tag">Problem → Principle → Prototype → Proof</div>
+  <div class="splash-skip">press any key, click, or scroll to skip</div>
+</div>
+
+<a class="skip" href="#main">Skip to main content</a>
+<canvas id="stars" aria-hidden="true"></canvas>
+
+<header class="header">
+  <button class="iconbtn mobile-only" id="navToggle" aria-label="Open navigation" aria-expanded="false">☰</button>
+  <div class="brand">
+    <div class="logo" aria-hidden="true">⚙</div>
+    <div class="brandtext">
+      <strong>Invention Foundry</strong>
+      <small>Problem → Principle → Prototype → Proof</small>
+    </div>
+  </div>
+  <div class="head-actions">
+    <div class="status-pill" title="This file saves locally in your browser."><span class="dot"></span><span id="saveState">Local autosave</span></div>
+    <div class="status-pill" id="netPill" hidden title="No connection right now. Everything still works and stays on this device."><span class="dot"></span><span id="netState">Offline</span></div>
+    <button class="iconbtn hide-xs" id="searchBtn" title="Search sections (Ctrl/⌘ K)">⌕ Search</button>
+    <button class="iconbtn" id="themeBtn" title="Toggle light/dark theme">◐</button>
+    <button class="iconbtn hide-xs" id="langBtn" title="Switch language" aria-label="Switch to French">Français</button>
+    <button class="btn primary hide-xs" data-jump="#dossier">Build dossier</button>
+  </div>
+</header>
+
+<div class="shell">
+<aside class="sidebar" id="sidebar" aria-label="Project navigation">
+  <div class="side-mini">
+    <div class="row" style="justify-content:space-between"><strong id="maturityLabel">Invention maturity</strong><span id="maturityPct">0%</span></div>
+    <div class="progress" role="progressbar" aria-label="Invention maturity" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="maturityBar"></span></div>
+    <div class="kbdhint" style="margin-top:.45rem"><span class="hud-stage" id="hudStage">Getting oriented</span> — <span id="maturityHint">progress reflects completed invention fields, not commercial readiness.</span></div>
+  </div>
+
+  <!-- [SIDEBAR-HUD] constellation state visualizer: built by renderConstellation()
+       in the script from the live project state -- nothing here is decorative
+       filler. Each star is a real <a href="#section"> link. -->
+  <div class="side-mini">
+    <div class="row" style="justify-content:space-between"><strong id="constellationLabel">Concept constellation</strong><span class="help" id="constellationHint">0/9 stars lit</span></div>
+    <svg id="constellation" viewBox="0 0 260 160" role="group" aria-label="One star per part of your invention record. Brighter, larger stars are further along. Select a star to jump to that section."></svg>
+    <div class="kbdhint" style="margin-top:.4rem" id="constellationSub">Brightness reflects how filled in that part is.</div>
+  </div>
+
+  <!-- [SIDEBAR-HUD] milestone badges: encouragement only. Nothing decays,
+       nothing compares you to anyone else, and nothing here is required --
+       see MILESTONES in the script to add or change what is tracked. -->
+  <div class="side-mini">
+    <div class="row" style="justify-content:space-between"><strong id="badgeLabel">Milestones</strong><span class="help" id="badgeCount">0/12</span></div>
+    <div id="badgeTray" class="badge-tray" role="list" aria-label="Milestones earned"></div>
+  </div>
+
+  <nav id="nav">
+    <div class="nav-group"><h2>Discover</h2>
+      <a class="navlink" href="#dashboard"><span class="num">00</span>Dashboard</a>
+      <a class="navlink" href="#problem"><span class="num">01</span>Problem Lab</a>
+      <a class="navlink" href="#foundry"><span class="num">02</span>Idea Foundry</a>
+      <a class="navlink" href="#morphology"><span class="num">03</span>Morphology</a>
+    </div>
+    <div class="nav-group"><h2>Engineer</h2>
+      <a class="navlink" href="#concept"><span class="num">04</span>Concept Spec</a>
+      <a class="navlink" href="#experiment"><span class="num">05</span>Experiment Studio</a>
+      <a class="navlink" href="#safety"><span class="num">06</span>Safety + Stewardship</a>
+      <a class="navlink" href="#score"><span class="num">07</span>Decision Matrix</a>
+    </div>
+    <div class="nav-group"><h2>Validate</h2>
+      <a class="navlink" href="#evidence"><span class="num">08</span>Evidence Ledger</a>
+      <a class="navlink" href="#priorart"><span class="num">09</span>Prior Art</a>
+      <a class="navlink" href="#roadmap"><span class="num">10</span>Roadmap</a>
+    </div>
+    <div class="nav-group"><h2>Ship knowledge</h2>
+      <a class="navlink" href="#prompts"><span class="num">11</span>Prompt Chains</a>
+      <a class="navlink" href="#dossier"><span class="num">12</span>Invention Dossier</a>
+      <a class="navlink" href="#data"><span class="num">13</span>Data + Backup</a>
+      <a class="navlink" href="#facilitator"><span class="num">14</span>Facilitator &amp; Rollout</a>
+    </div>
+  </nav>
+</aside>
+
+<main class="main" id="main">
+
+<!-- ================== [PARALLAX-INTRO] ==================
+     Three short beats framing why this file exists and who it is for,
+     ahead of the working tool. See initParallax() in the script; each
+     beat's background wash drifts a few pixels with scroll via the --p
+     custom property it sets, while the actual text never moves. -->
+<section class="intro" id="intro" aria-label="About this tool" data-search="about mission purpose classroom teacher student policy institution stewardship">
+  <div class="intro-beat">
+    <div class="beat-bg" aria-hidden="true"></div>
+    <div class="beat-content">
+      <div class="eyebrow">Before the tool</div>
+      <h2>Most good ideas die of paperwork, not physics.</h2>
+      <p>A resident notices a real problem. A student sees an obvious fix. A civil servant knows exactly where a process breaks. What's usually missing isn't cleverness — it's a shared, rigorous, low-cost way to turn that noticing into a documented concept that a school, a council or a company can actually evaluate. That is the entire job of this file.</p>
+    </div>
+  </div>
+  <div class="intro-beat">
+    <div class="beat-bg" aria-hidden="true"></div>
+    <div class="beat-content">
+      <div class="eyebrow">Three ways in</div>
+      <h2>Built to be used alone, or handed to a room full of people.</h2>
+      <div class="intro-cards">
+        <div class="card"><h3>One inventor</h3><p>Work section by section at your own pace. Everything typed here stays on this device.</p></div>
+        <div class="card"><h3>A classroom or cohort</h3><p>A teacher or facilitator can run the pipeline as a single session or a multi-week unit — see the Facilitator section near the end.</p></div>
+        <div class="card"><h3>An institution or policy team</h3><p>Adopt the same structure as a shared intake standard for reviewing proposals, without adopting any particular proposal's conclusions.</p></div>
+      </div>
+    </div>
+  </div>
+  <div class="intro-beat">
+    <div class="beat-bg" aria-hidden="true"></div>
+    <div class="beat-content">
+      <div class="eyebrow">Before you start</div>
+      <h2>Optimizing anything can go wrong. This file is built to make that visible, not hide it.</h2>
+      <p>Every project here carries a Safety + Stewardship gate: foreseeable misuse, lifecycle impact, accessibility, and who could be harmed if the concept works exactly as intended. It isn't a checkbox to clear quickly — it's the same discipline the rest of the tool applies to novelty and feasibility, applied to consequences.</p>
+      <div class="row no-print" style="margin-top:1rem"><button class="btn primary" data-jump="#dashboard">Open the workbook</button></div>
+    </div>
+  </div>
+</section>
+
+<section class="hero" id="dashboard">
+  <div class="eyebrow">Innovation operating system • private by default</div>
+  <h1>Turn a fuzzy idea into a <span style="color:var(--accent)">testable invention</span>.</h1>
+  <p>Use structured reframing, contradiction prompts, cross-domain transfer, morphology, evidence, experiments and risk checks to move from “interesting thought” to a documented concept that can be tested, compared and improved.</p>
+  <div class="hero-actions no-print">
+    <button class="btn primary" data-jump="#problem">Start with the problem</button>
+    <button class="btn" id="newProjectBtn">New project</button>
+    <button class="btn" id="quickIdeaBtn">⚡ Generate idea lenses</button>
+  </div>
+  <div class="metrics">
+    <div class="metric"><b id="metricIdeas">0</b><small>generated concept lenses</small></div>
+    <div class="metric"><b id="metricEvidence">0</b><small>evidence entries</small></div>
+    <div class="metric"><b id="metricExperiments">0</b><small>experiment plans</small></div>
+    <div class="metric"><b id="metricScore">0</b><small>decision score / 100</small></div>
+  </div>
+</section>
+
+<section class="section" id="problem" data-search="problem root cause jobs pains constraints stakeholder assumptions outcome">
+  <div class="section-head">
+    <div class="grow"><div class="eyebrow">01 • Problem Lab</div><h2>Define the problem before defending a solution.</h2><p>Make the need observable, bounded and falsifiable. Separate symptoms, root causes, assumptions and constraints.</p></div>
+    <button class="btn no-print" data-collapse="problemBody">Collapse</button>
+  </div>
+  <div class="section-body" id="problemBody">
+    <div class="grid">
+      <div class="col-8 card">
+        <div class="field"><label for="projectName">Working invention name</label><input id="projectName" data-bind="project.name" type="text" placeholder="e.g., Passive freeze-safe community water valve"></div>
+        <div class="field"><label for="problemText">Problem statement <span class="help">Who experiences what problem, where, and under what conditions?</span></label><textarea id="problemText" data-bind="problem.statement" placeholder="People/organizations struggle to… because… resulting in…"></textarea></div>
+        <div class="grid">
+          <div class="col-6 field"><label for="f-problem-user">Primary user / beneficiary</label><input id="f-problem-user" data-bind="problem.user" type="text" placeholder="Who directly benefits?"></div>
+          <div class="col-6 field"><label for="f-problem-context">Context / environment</label><input id="f-problem-context" data-bind="problem.context" type="text" placeholder="Climate, workflow, location, device, scale…"></div>
+          <div class="col-6 field"><label for="f-problem-outcome">Desired outcome</label><input id="f-problem-outcome" data-bind="problem.outcome" type="text" placeholder="A measurable change"></div>
+          <div class="col-6 field"><label for="f-problem-workaround">Current workaround</label><input id="f-problem-workaround" data-bind="problem.workaround" type="text" placeholder="What do people do today?"></div>
+        </div>
+      </div>
+      <div class="col-4 card">
+        <h3>Assumption splitter</h3>
+        <div class="field"><label for="assumptionInput">What must be true for your current idea to work?</label><textarea id="assumptionInput" placeholder="One assumption per line"></textarea></div>
+        <button class="btn" id="splitAssumptions">Convert to tests</button>
+        <div class="list" id="assumptionList" style="margin-top:.7rem"></div>
+      </div>
+      <div class="col-6 card">
+        <h3>Five-layer cause probe</h3>
+        <p class="help">Do not force exactly five “whys.” Use five causal layers as prompts.</p>
+        <div class="stack" id="causeFields"></div>
+      </div>
+      <div class="col-6 card">
+        <h3>Constraint map</h3>
+        <div class="grid">
+          <div class="col-6 field"><label for="f-problem-hardconstraints">Hard constraints</label><textarea id="f-problem-hardconstraints" data-bind="problem.hardConstraints" placeholder="Physics, law, budget ceiling, size, power…"></textarea></div>
+          <div class="col-6 field"><label for="f-problem-softconstraints">Soft constraints</label><textarea id="f-problem-softconstraints" data-bind="problem.softConstraints" placeholder="Preferences, habits, procurement friction…"></textarea></div>
+        </div>
+        <div class="field"><label for="f-problem-safetybounds">Non-negotiable safety boundaries</label><textarea id="f-problem-safetybounds" data-bind="problem.safetyBounds" placeholder="What must never be sacrificed for performance?"></textarea></div>
+      </div>
+      <div class="col-12 card">
+        <h3>Reframe engine</h3>
+        <div class="row no-print">
+          <button class="btn" id="reframeBtn">Generate reframes</button>
+          <button class="btn" id="copyReframes">Copy</button>
+        </div>
+        <div class="output" id="reframeOutput" aria-live="polite">Add a problem statement, then generate reframes.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="foundry" data-search="idea invention creativity triz contradiction biomimicry reverse simplify modular combine mechanism">
+  <div class="section-head"><div class="grow"><div class="eyebrow">02 • Idea Foundry</div><h2>Generate concepts through mechanisms, not adjectives.</h2><p>Use innovation lenses that deliberately change architecture, information flow, materials, control, timing or scale.</p></div><button class="btn no-print" data-collapse="foundryBody">Collapse</button></div>
+  <div class="section-body" id="foundryBody">
+    <div class="grid">
+      <div class="col-6 card">
+        <h3>Contradiction explorer</h3>
+        <p class="help">Choose what you want to improve and what tends to worsen. The engine returns general inventive principles to explore.</p>
+        <div class="grid">
+          <div class="col-6 field"><label for="improveSelect">Improve</label><select id="improveSelect"></select></div>
+          <div class="col-6 field"><label for="worsenSelect">Without worsening</label><select id="worsenSelect"></select></div>
+        </div>
+        <button class="btn primary" id="contradictionBtn">Resolve contradiction</button>
+        <div id="contradictionOutput" class="output" style="margin-top:.7rem">Select two competing attributes.</div>
+      </div>
+      <div class="col-6 card">
+        <h3>Cross-domain transfer</h3>
+        <div class="field"><label for="functionInput">What function must the invention perform?</label><input id="functionInput" type="text" placeholder="e.g., detect a leak early"></div>
+        <div class="field"><label for="domainSelect">Borrow from</label><select id="domainSelect"></select></div>
+        <button class="btn" id="transferBtn">Generate transfer prompts</button>
+        <div id="transferOutput" class="output" style="margin-top:.7rem"></div>
+      </div>
+      <div class="col-12 card">
+        <div class="row" style="justify-content:space-between"><h3 style="margin:0">Innovation lens deck</h3><div class="chips"><span class="chip">architecture</span><span class="chip">control</span><span class="chip">materials</span><span class="chip">timing</span><span class="chip">information</span></div></div>
+        <div class="row no-print" style="margin:.7rem 0"><button class="btn primary" id="lensBtn">Deal 8 lenses</button><button class="btn" id="clearIdeas">Clear generated</button></div>
+        <div class="grid" id="ideaCards"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="morphology" data-search="morphological matrix combinations subfunctions options configurations architecture">
+  <div class="section-head"><div class="grow"><div class="eyebrow">03 • Morphology</div><h2>Explore the design space systematically.</h2><p>Break the invention into subfunctions, list multiple ways to satisfy each, then generate configurations.</p></div><button class="btn no-print" data-collapse="morphBody">Collapse</button></div>
+  <div class="section-body" id="morphBody">
+    <div class="grid">
+      <div class="col-6 card">
+        <h3>Subfunctions</h3>
+        <div id="morphInputs" class="stack"></div>
+        <div class="row no-print" style="margin-top:.7rem"><button class="btn" id="addMorphRow">+ Add subfunction</button><button class="btn primary" id="generateMorph">Generate configurations</button></div>
+      </div>
+      <div class="col-6 card">
+        <h3>Generated configurations</h3>
+        <div id="morphOutput" class="stack"><div class="help">Add at least two subfunctions with comma-separated options.</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="concept" data-search="concept specification function mechanism interface materials energy inputs outputs architecture">
+  <div class="section-head"><div class="grow"><div class="eyebrow">04 • Concept Spec</div><h2>Describe what the invention does and how it does it.</h2><p>Write a mechanism-level specification before polishing branding or pitch language.</p></div><button class="btn no-print" data-collapse="conceptBody">Collapse</button></div>
+  <div class="section-body" id="conceptBody">
+    <div class="grid">
+      <div class="col-8 card">
+        <div class="field"><label for="f-concept-summary">One-sentence concept</label><textarea id="f-concept-summary" data-bind="concept.summary" placeholder="A [system/device/process] that [mechanism] to [measurable outcome] under [conditions]."></textarea></div>
+        <div class="grid">
+          <div class="col-6 field"><label for="f-concept-function">Primary function</label><input id="f-concept-function" data-bind="concept.function" type="text"></div>
+          <div class="col-6 field"><label for="f-concept-mechanism">Core mechanism</label><input id="f-concept-mechanism" data-bind="concept.mechanism" type="text"></div>
+          <div class="col-6 field"><label for="f-concept-inputs">Inputs</label><textarea id="f-concept-inputs" data-bind="concept.inputs" placeholder="Matter, energy, information, human actions"></textarea></div>
+          <div class="col-6 field"><label for="f-concept-outputs">Outputs</label><textarea id="f-concept-outputs" data-bind="concept.outputs"></textarea></div>
+          <div class="col-6 field"><label for="f-concept-interfaces">Interfaces</label><textarea id="f-concept-interfaces" data-bind="concept.interfaces" placeholder="Human, software, mechanical, environmental interfaces"></textarea></div>
+          <div class="col-6 field"><label for="f-concept-failuremodes">Failure modes</label><textarea id="f-concept-failuremodes" data-bind="concept.failureModes" placeholder="What can fail and how?"></textarea></div>
+        </div>
+      </div>
+      <div class="col-4 card">
+        <h3>Minimum Viable Proof</h3>
+        <div class="field"><label for="f-concept-mvpproof">Smallest thing that could disprove or support the key mechanism</label><textarea id="f-concept-mvpproof" data-bind="concept.mvpProof"></textarea></div>
+        <div class="field"><label for="f-concept-prototypemedium">Fastest safe prototype medium</label><select id="f-concept-prototypemedium" data-bind="concept.prototypeMedium">
+          <option value="">Select…</option><option>Paper / storyboard</option><option>Simulation / spreadsheet</option><option>Software mock</option><option>Breadboard / bench rig</option><option>Scale model</option><option>Wizard-of-Oz service test</option><option>Material coupon test</option>
+        </select></div>
+        <div class="callout warn">Prototype to learn, not to impress. Choose the cheapest safe test that can kill a weak assumption early.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="experiment" data-search="experiment hypothesis test metric threshold variable control prototype validation falsification">
+  <div class="section-head"><div class="grow"><div class="eyebrow">05 • Experiment Studio</div><h2>Convert beliefs into falsifiable tests.</h2><p>Define the hypothesis, measured variable, acceptance threshold, method and stopping condition before looking at results.</p></div><button class="btn no-print" data-collapse="experimentBody">Collapse</button></div>
+  <div class="section-body" id="experimentBody">
+    <div class="grid">
+      <div class="col-6 card">
+        <div class="field"><label for="expHypothesis">Hypothesis</label><textarea id="expHypothesis" placeholder="If [mechanism/change], then [metric] will [change] by [threshold] under [conditions]."></textarea></div>
+        <div class="grid">
+          <div class="col-6 field"><label for="expIV">Independent variable</label><input id="expIV" type="text"></div>
+          <div class="col-6 field"><label for="expMetric">Measured outcome</label><input id="expMetric" type="text"></div>
+          <div class="col-6 field"><label for="expThreshold">Success threshold</label><input id="expThreshold" type="text" placeholder="e.g., ≥20% reduction"></div>
+          <div class="col-6 field"><label for="expStop">Stop / fail condition</label><input id="expStop" type="text" placeholder="Safety or futility boundary"></div>
+        </div>
+        <div class="field"><label for="expMethod">Method</label><textarea id="expMethod" placeholder="Step-by-step test method, controls, repeats, instrumentation…"></textarea></div>
+        <div class="field"><label for="expRisk">Known hazards / precautions</label><textarea id="expRisk"></textarea></div>
+        <button class="btn primary" id="addExperiment">Save experiment</button>
+      </div>
+      <div class="col-6 card">
+        <h3>Experiment queue</h3>
+        <div id="experimentList" class="list"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="safety" data-search="safety ethics accessibility circularity privacy harm misuse sustainability lifecycle repair stewardship">
+  <div class="section-head"><div class="grow"><div class="eyebrow">06 • Safety + Stewardship</div><h2>Optimize without externalizing harm.</h2><p>Check foreseeable misuse, lifecycle impacts, accessibility, privacy, reversibility and repairability alongside performance.</p></div><button class="btn no-print" data-collapse="safetyBody">Collapse</button></div>
+  <div class="section-body" id="safetyBody">
+    <div class="grid">
+      <div class="col-6 card"><h3>Zero-harm gate</h3><div id="safetyChecks" class="stack"></div></div>
+      <div class="col-6 card">
+        <h3>Stewardship notes</h3>
+        <div class="field"><label for="f-safety-misuse">Foreseeable misuse / inversion</label><textarea id="f-safety-misuse" data-bind="safety.misuse" placeholder="How could this be repurposed in ways that undermine its intended benefit?"></textarea></div>
+        <div class="field"><label for="f-safety-mitigations">Mitigations</label><textarea id="f-safety-mitigations" data-bind="safety.mitigations"></textarea></div>
+        <div class="field"><label for="f-safety-lifecycle">Lifecycle + end-of-life</label><textarea id="f-safety-lifecycle" data-bind="safety.lifecycle" placeholder="Repair, modularity, recyclability, consumables, disposal…"></textarea></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="score" data-search="score decision matrix novelty feasibility value evidence safety sustainability inclusion adoption">
+  <div class="section-head"><div class="grow"><div class="eyebrow">07 • Decision Matrix</div><h2>Score the concept, then inspect why.</h2><p>This is a thinking aid—not an objective truth. Adjust sliders as evidence improves.</p></div><button class="btn no-print" data-collapse="scoreBody">Collapse</button></div>
+  <div class="section-body" id="scoreBody">
+    <div class="grid">
+      <div class="col-8 card" id="scoreRows"></div>
+      <div class="col-4 card" style="display:grid;place-items:center">
+        <div>
+          <div class="score-circle" id="scoreCircle"><strong id="scoreValue">0</strong></div>
+          <p class="help" style="text-align:center">Weighted concept score / 100</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="evidence" data-search="evidence ledger source observation prototype test interview paper data confidence">
+  <div class="section-head"><div class="grow"><div class="eyebrow">08 • Evidence Ledger</div><h2>Separate what is known from what is hoped.</h2><p>Log observations, tests, user evidence and external references with confidence and relevance.</p></div><button class="btn no-print" data-collapse="evidenceBody">Collapse</button></div>
+  <div class="section-body" id="evidenceBody">
+    <div class="grid">
+      <div class="col-4 card">
+        <div class="field"><label for="evType">Evidence type</label><select id="evType"><option>Observation</option><option>Prototype test</option><option>User interview</option><option>Dataset</option><option>Paper / report</option><option>Patent / prior art</option><option>Expert review</option><option>Market signal</option></select></div>
+        <div class="field"><label for="evSummary">Summary</label><textarea id="evSummary"></textarea></div>
+        <div class="field"><label for="evSource">Source / URL / reference</label><input id="evSource" type="text"></div>
+        <div class="field"><label for="evConfidence">Confidence</label><select id="evConfidence"><option value="20">Very low</option><option value="40">Low</option><option value="60" selected>Moderate</option><option value="80">High</option><option value="95">Very high</option></select></div>
+        <button class="btn primary" id="addEvidence">Add evidence</button>
+      </div>
+      <div class="col-8 card">
+        <h3>Ledger</h3>
+        <div id="evidenceList" class="list"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="priorart" data-search="prior art patent novelty search claims google patents espacenet lens scholarly search query">
+  <div class="section-head"><div class="grow"><div class="eyebrow">09 • Prior Art</div><h2>Search before claiming novelty.</h2><p>Generate neutral search queries around function, mechanism, geometry, materials and use context. Record what overlaps and what remains distinct.</p></div><button class="btn no-print" data-collapse="priorBody">Collapse</button></div>
+  <div class="section-body" id="priorBody">
+    <div class="grid">
+      <div class="col-6 card">
+        <h3>Search-query builder</h3>
+        <div class="field"><label for="paFunction">Key function</label><input id="paFunction" type="text"></div>
+        <div class="field"><label for="paMechanism">Mechanism / principle</label><input id="paMechanism" type="text"></div>
+        <div class="field"><label for="paContext">Use context</label><input id="paContext" type="text"></div>
+        <button class="btn primary" id="buildQueries">Build queries</button>
+        <div class="output" id="queryOutput" style="margin-top:.7rem"></div>
+      </div>
+      <div class="col-6 card">
+        <h3>Novelty notes</h3>
+        <div class="field"><label for="f-prior-closest">Closest known alternatives</label><textarea id="f-prior-closest" data-bind="prior.closest"></textarea></div>
+        <div class="field"><label for="f-prior-distinctions">Potentially novel distinctions</label><textarea id="f-prior-distinctions" data-bind="prior.distinctions"></textarea></div>
+        <div class="callout">Patentability is jurisdiction-specific and legal advice is separate from technical novelty analysis. Use this module to organize your search, not to declare a patent valid.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="roadmap" data-search="roadmap milestones prototype validate iterate manufacturing adoption deployment handoff">
+  <div class="section-head"><div class="grow"><div class="eyebrow">10 • Roadmap</div><h2>Move by evidence gates, not excitement alone.</h2><p>Each stage has an exit criterion. Advance only when the relevant uncertainty is reduced enough.</p></div><button class="btn no-print" data-collapse="roadmapBody">Collapse</button></div>
+  <div class="section-body" id="roadmapBody">
+    <div class="grid" id="roadmapGrid"></div>
+  </div>
+</section>
+
+<section class="section" id="prompts" data-search="prompt chain ai researcher engineer skeptic safety reviewer patent market prototype">
+  <div class="section-head"><div class="grow"><div class="eyebrow">11 • Prompt Chains</div><h2>Use AI as a panel of roles, not a single oracle.</h2><p>Generate structured prompts that force separate passes for research, engineering, critique, experiment design and synthesis.</p></div><button class="btn no-print" data-collapse="promptsBody">Collapse</button></div>
+  <div class="section-body" id="promptsBody">
+    <div class="grid">
+      <div class="col-4 card">
+        <h3>Prompt generator</h3>
+        <div class="field"><label for="promptRole">Role</label><select id="promptRole"><option>Research analyst</option><option>Mechanical / systems engineer</option><option>Scientific skeptic</option><option>Human factors reviewer</option><option>Safety reviewer</option><option>Manufacturing engineer</option><option>Prior-art researcher</option><option>Adoption strategist</option></select></div>
+        <div class="field"><label for="promptDepth">Depth</label><select id="promptDepth"><option>Fast scan</option><option selected>Deep review</option><option>Red-team review</option></select></div>
+        <button class="btn primary" id="generatePrompt">Generate prompt</button>
+      </div>
+      <div class="col-8 card">
+        <div class="row" style="justify-content:space-between"><h3 style="margin:0">Generated prompt</h3><button class="btn no-print" id="copyPrompt">Copy</button></div>
+        <div class="output" id="promptOutput">Choose a role and generate a prompt.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="dossier" data-search="dossier report invention brief executive summary problem concept experiments evidence risks next steps">
+  <div class="section-head"><div class="grow"><div class="eyebrow">12 • Invention Dossier</div><h2>Compile your current invention record.</h2><p>Create a portable, printable snapshot of the problem, concept, evidence, experiments, safety notes and next steps.</p></div><button class="btn no-print" data-collapse="dossierBody">Collapse</button></div>
+  <div class="section-body" id="dossierBody">
+    <div class="row no-print" style="margin-bottom:.8rem"><button class="btn primary" id="buildDossier">Refresh dossier</button><button class="btn" id="copyDossier">Copy text</button><button class="btn" id="printDossier">Print / Save PDF</button></div>
+    <article class="card" id="dossierOutput"><p class="help">Refresh to compile the current project.</p></article>
+  </div>
+</section>
+
+<section class="section" id="data" data-search="data backup export import json indexeddb local storage privacy reset portability">
+  <div class="section-head"><div class="grow"><div class="eyebrow">13 • Data + Backup</div><h2>Keep your invention data portable.</h2><p>Data is saved in this browser using IndexedDB, with lightweight preferences in localStorage. Export JSON for durable backup or transfer.</p></div><button class="btn no-print" data-collapse="dataBody">Collapse</button></div>
+  <div class="section-body" id="dataBody">
+    <div class="grid">
+      <div class="col-6 card">
+        <h3>Backup</h3>
+        <div class="row"><button class="btn primary" id="exportBtn">Export JSON</button><label class="btn" for="importFile" style="margin:0">Import JSON</label><input class="sr-only" id="importFile" type="file" accept="application/json,.json"></div>
+        <p class="help" id="backupNote">Exports include your invention fields, evidence, experiments, generated ideas, checklist state, scoring and milestone progress. They never include your display preferences or your local usage insights, and importing a file never changes your own preferences.</p>
+      </div>
+      <div class="col-6 card">
+        <h3>Reset</h3>
+        <button class="btn danger" id="resetBtn">Reset current project</button>
+        <p class="help" id="resetNote">This affects only this browser profile, and only the project content: your theme, language and insights settings stay as they are. Export first if the project matters.</p>
+      </div>
+      <div class="col-12 card">
+        <h3>Connectivity + offline behavior</h3>
+        <p>This standalone file has no external dependencies and can run from <code>file://</code>. Browser-local data is available offline after the file is opened. A single local HTML file cannot honestly provide service-worker caching or background synchronization by itself; those require hosting and companion files.</p>
+      </div>
+      <!-- [SCRIPT: INSIGHTS] Opt-in, local-only, fully resettable. Off by
+           default. See renderInsights() and the IntersectionObserver hook
+           in the script -- nothing here is ever transmitted anywhere. -->
+      <div class="col-12 card">
+        <h3 id="insightsTitle">Local usage insights <span class="help">(off by default)</span></h3>
+        <p class="help" id="insightsDesc">If turned on, this counts which sections you open and roughly how long the tab stays active in this browser only — never sent anywhere, and there's no code path in this file that could send it anywhere. Turn it off or clear it at any time.</p>
+        <label style="display:flex;gap:.6rem;align-items:center;font-weight:600;margin:.5rem 0"><input type="checkbox" id="insightsToggle"> <span id="insightsToggleText">Track local usage insights</span></label>
+        <div id="insightsSummary" class="help">Insights are currently off.</div>
+        <div class="row no-print" style="margin-top:.7rem"><button class="btn danger" id="insightsClear">Clear insights</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================== [FACILITATOR] ==================
+     Section 14. Aimed squarely at the teacher/facilitator and the
+     policy-or-institutional-adoption audience this file is written for --
+     everything here is guidance, not project data, so none of it counts
+     toward the invention-maturity metric. -->
+<section class="section" id="facilitator" data-search="facilitator classroom teacher student workshop institution policy rollout training cohort curriculum adoption privacy agenda">
+  <div class="section-head"><div class="grow"><div class="eyebrow">14 • Facilitator &amp; Rollout</div><h2>Hand this to a room, not just a person.</h2><p>Guidance for running this tool with a class, a team, or as a standard intake pattern inside an institution — without changing anything about how any single project's data is handled.</p></div><button class="btn no-print" data-collapse="facilitatorBody">Collapse</button></div>
+  <div class="section-body" id="facilitatorBody">
+    <div class="grid">
+      <div class="col-6 card">
+        <h3>One class period (45-75 minutes)</h3>
+        <ol class="agenda">
+          <li><strong>Frame (10 min):</strong> each student or team names one real problem in Problem Lab. Skip perfection — a rough problem statement is enough to start.</li>
+          <li><strong>Diverge (15 min):</strong> deal a hand of idea lenses in the Idea Foundry. Ban judging ideas out loud during this step.</li>
+          <li><strong>Converge (10 min):</strong> pick one idea and write a one-sentence concept in Concept Spec.</li>
+          <li><strong>Stress-test (10 min):</strong> run the Safety + Stewardship gate together as a class, out loud, one item at a time.</li>
+          <li><strong>Share (10-20 min):</strong> print or copy the dossier; groups present their problem and concept, not their whole file.</li>
+        </ol>
+      </div>
+      <div class="col-6 card">
+        <h3>Multi-week unit</h3>
+        <ol class="agenda">
+          <li><strong>Week 1:</strong> Problem Lab, Idea Foundry and Morphology. Homework: talk to one real potential beneficiary.</li>
+          <li><strong>Week 2:</strong> Concept Spec and Experiment Studio. Build the cheapest safe prototype the Minimum Viable Proof field describes.</li>
+          <li><strong>Week 3:</strong> Evidence Ledger and Prior Art. Require at least one non-classmate source in the ledger.</li>
+          <li><strong>Week 4:</strong> Decision Matrix, Roadmap and the Invention Dossier. Grade the reasoning shown, not whether the score is high.</li>
+        </ol>
+      </div>
+      <div class="col-6 card">
+        <h3>For an institution or policy team</h3>
+        <p>Treat the 13-section pipeline as a shared intake standard rather than software to procure: any team can open this same file, or a copy of it, and produce a dossier in the same shape. That makes early-stage proposals comparable to one another without forcing them toward the same conclusion, and gives a reviewing body a consistent place to look for the safety and evidence sections specifically.</p>
+        <p class="help">Because every copy of this file is independent and offline-first, standardizing on it does not require standing up new infrastructure, accounts, or a vendor relationship.</p>
+      </div>
+      <div class="col-6 card">
+        <h3>Student and participant privacy</h3>
+        <p>Nothing typed into this tool leaves the device it is running on. There is no account, no login, and no server component to secure or breach. A teacher collecting dossiers from a class still needs an ordinary privacy-conscious process for that collection step itself (for example, printed hand-ins or files submitted through the school's existing system) — this file's privacy guarantee is only that it introduces no new collection point of its own.</p>
+      </div>
+      <div class="col-12 card">
+        <div class="row" style="justify-content:space-between"><h3 style="margin:0">Printable one-page agenda</h3><button class="btn no-print" id="copyAgenda">Copy</button></div>
+        <div class="output" id="agendaOutput">1. Frame (10 min): each student or team names one real problem in Problem Lab.
+2. Diverge (15 min): deal a hand of idea lenses in the Idea Foundry. No judging ideas out loud.
+3. Converge (10 min): pick one idea and write a one-sentence concept in Concept Spec.
+4. Stress-test (10 min): run the Safety + Stewardship gate together, one item at a time.
+5. Share (10-20 min): print or copy the dossier; present the problem and concept, not the whole file.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="footer">
+  <!-- Zero-Harm / Anti-Inversion (HTML-comment mirror of the visible note below):
+       treat invention as stewardship; never optimize a metric by shifting cost,
+       risk or loss of agency onto people, communities, ecosystems or future
+       users; collect nothing the person cannot see, export or delete. -->
+  <div class="privacy"><strong>Zero-Harm / Anti-Inversion:</strong> invention is treated as stewardship. Do not optimize a metric by shifting costs, risks or loss of agency onto people, communities, ecosystems or future users. The milestone badges and constellation in the sidebar follow the same rule: they only ever mark real progress back to you — they never decay, compare you to anyone else, or manufacture urgency.</div>
+  <!-- Attributions and Licensing: states facts about this file only. It does not
+       grant or assert any license on the author's behalf; whoever distributes a
+       copy decides that. Extend the list if you add anything third-party. -->
+  <section class="attrib" aria-labelledby="attribTitle">
+    <h2 id="attribTitle">Attributions &amp; Licensing</h2>
+    <ul>
+      <li id="attribCode"><strong>Code:</strong> written for this file. No third-party libraries, fonts, icons, images or trackers are bundled, so no third-party license terms apply inside it. It draws only on your device's own system fonts and standard Unicode symbols.</li>
+      <li id="attribPatterns"><strong>Patterns, not code:</strong> a command-palette-style search dialog, a scroll-aware table of contents, single-document IndexedDB persistence and accessible dialog and disclosure behaviour are common, openly documented web conventions (for example the W3C WAI-ARIA Authoring Practices). They are re-implemented here from their public descriptions; nothing was copied from a restricted or unlicensed codebase.</li>
+      <li id="attribMethods"><strong>Methods credited:</strong> morphological analysis (Fritz Zwicky), the inventive-principles tradition of TRIZ (Genrich Altshuller and colleagues), falsifiability (Karl Popper) and biomimicry as a design practice (popularized by Janine Benyus). They are referenced descriptively; no proprietary tables, matrices or text are reproduced.</li>
+      <li id="attribAdapt"><strong>If you adapt this file:</strong> keep the Zero-Harm / Anti-Inversion note and this section with it, and add notices for anything third-party that you introduce.</li>
+    </ul>
+    <p class="help" id="insightsNote">Local usage insights, if turned on in Data + Backup, are optional, local-only and resettable in one click; they default to off, nothing about them is ever sent anywhere, and exports never include them.</p>
+  </section>
+  <p id="footerBuiltFor"><span id="footerBuiltForText">Built for portable local use</span> • <span id="footerDate"></span></p>
+</footer>
+</main>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<dialog class="dialog" id="searchDialog">
+  <div class="dialog-body">
+    <div class="row" style="justify-content:space-between"><h2 style="margin:0">Search this OS</h2><button class="iconbtn" id="closeSearch" aria-label="Close search">✕</button></div>
+    <div class="field" style="margin-top:.8rem"><label for="globalSearch">Search sections, methods and features</label><input id="globalSearch" type="text" placeholder="e.g., evidence, prototype, prior art"></div>
+    <div id="searchResults" class="search-results"></div>
+  </div>
+</dialog>
+
+<script>
+(() => {
+'use strict';
+
+const $ = (s,root=document)=>root.querySelector(s);
+const $$ = (s,root=document)=>[...root.querySelectorAll(s)];
+const nowISO = () => new Date().toISOString();
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : 'id-'+Date.now()+'-'+Math.random().toString(16).slice(2));
+/* localStorage can throw (storage blocked, some private modes). These never
+   do, so a blocked store degrades to "no remembered theme/language" instead
+   of stopping the whole page from rendering. */
+const lsGet = k => { try{ return localStorage.getItem(k); }catch(e){ return null; } };
+const lsSet = (k,v) => { try{ localStorage.setItem(k,v); }catch(e){} };
+
+const DEFAULT_STATE = {
+  schema:1,
+  project:{name:'',createdAt:nowISO(),updatedAt:nowISO()},
+  problem:{statement:'',user:'',context:'',outcome:'',workaround:'',hardConstraints:'',softConstraints:'',safetyBounds:'',causes:['','','','',''],assumptions:[]},
+  concept:{summary:'',function:'',mechanism:'',inputs:'',outputs:'',interfaces:'',failureModes:'',mvpProof:'',prototypeMedium:''},
+  safety:{misuse:'',mitigations:'',lifecycle:'',checks:{}},
+  prior:{closest:'',distinctions:''},
+  ideas:[],morphRows:[],experiments:[],evidence:[],
+  scores:{utility:50,novelty:50,feasibility:50,safety:70,inclusion:60,sustainability:60,evidence:30,adoption:50},
+  roadmap:{},
+  /* Same store, same save path as everything above -- these additions are
+     why a second IndexedDB object store was NOT introduced: settings,
+     language and HUD data are just more fields on the one document this
+     file already persists via DB.set(state), per the architecture-map note
+     at the top of the file. ui.theme and ui.lang stay '' until the person
+     makes an explicit choice; until then the theme follows the system
+     setting and the language follows the browser's language. Nothing in
+     `insights` or `ui` is ever included in an export. */
+  ui:{theme:'',lang:''},
+  milestones:{},
+  insights:{enabled:false,sectionViews:{},sessionsCount:0,activeMs:0}
+};
+let state = structuredClone(DEFAULT_STATE);
+let saveTimer = null;
+
+const DB = {
+  name:'invention-foundry-db', store:'projects', key:'current',
+  open(){
+    return new Promise((resolve,reject)=>{
+      const r=indexedDB.open(this.name,1);
+      r.onupgradeneeded=()=>{ if(!r.result.objectStoreNames.contains(this.store)) r.result.createObjectStore(this.store); };
+      r.onsuccess=()=>resolve(r.result); r.onerror=()=>reject(r.error);
+    });
+  },
+  async get(){
+    try{ const db=await this.open(); return await new Promise((res,rej)=>{const tx=db.transaction(this.store,'readonly');const q=tx.objectStore(this.store).get(this.key);q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)});}catch(e){return null}
+  },
+  async set(v){
+    const db=await this.open(); return new Promise((res,rej)=>{const tx=db.transaction(this.store,'readwrite');tx.objectStore(this.store).put(v,this.key);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error)});
+  },
+  async clear(){
+    const db=await this.open(); return new Promise((res,rej)=>{const tx=db.transaction(this.store,'readwrite');tx.objectStore(this.store).delete(this.key);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error)});
+  }
+};
+
+function toast(msg){
+  const el=$('#toast'); el.textContent=msg; el.classList.add('show');
+  clearTimeout(el._t); el._t=setTimeout(()=>el.classList.remove('show'),2400);
+}
+function getPath(obj,path){ return path.split('.').reduce((o,k)=>o?.[k],obj); }
+function setPath(obj,path,val){ const parts=path.split('.'); let o=obj; parts.slice(0,-1).forEach(k=>o=o[k]??=( {} )); o[parts.at(-1)]=val; }
+function esc(s=''){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+function debounceSave(){
+  $('#saveState').textContent=t('savingEllipsis');
+  clearTimeout(saveTimer); saveTimer=setTimeout(async()=>{
+    state.project.updatedAt=nowISO();
+    try{await DB.set(state); $('#saveState').textContent=t('savedLocally'); updateMetrics();}catch(e){$('#saveState').textContent=t('saveFailed');}
+  },250);
+}
+/* Gentle size limiting (see the architecture-map note at the top of this
+   file). Caps are generous -- this is a backstop against a runaway paste
+   bloating IndexedDB and the exported JSON, not a constraint on normal
+   writing. Only trims and warns on the rare occasions it actually bites. */
+function enforceSoftLimit(el,cap){
+  if(el.value.length>cap){
+    el.value=el.value.slice(0,cap);
+    toast(`That field is capped at ${cap.toLocaleString()} characters to keep exports manageable.`);
+  }
+  return el.value;
+}
+function bindInputs(){
+  $$('[data-bind]').forEach(el=>{
+    const path=el.dataset.bind, val=getPath(state,path);
+    if(el.type==='checkbox') el.checked=!!val; else el.value=val??'';
+    const cap=el.tagName==='TEXTAREA'?6000:500; // gentle backstop; see enforceSoftLimit()
+    el.addEventListener('input',()=>{
+      setPath(state,path,el.type==='checkbox'?el.checked:enforceSoftLimit(el,cap));
+      debounceSave(); updateMetrics();
+    });
+  });
+}
+
+function renderCauses(){
+  const box=$('#causeFields'); box.innerHTML='';
+  const labels=['Observed symptom','Immediate cause','System / process cause','Structural / incentive cause','Underlying design assumption'];
+  labels.forEach((label,i)=>{
+    const wrap=document.createElement('div');wrap.className='field';
+    const causeId='cause-'+i; // per-row id: this renders five rows, so a static id would duplicate
+    wrap.innerHTML=`<label for="${causeId}">${i+1}. ${label}</label><input id="${causeId}" type="text" value="${esc(state.problem.causes[i]||'')}" placeholder="What creates the layer above?">`;
+    const input=$('input',wrap);input.addEventListener('input',()=>{state.problem.causes[i]=input.value;debounceSave();updateMetrics()});
+    box.appendChild(wrap);
+  });
+}
+function renderAssumptions(){
+  const box=$('#assumptionList'); box.innerHTML='';
+  if(!state.problem.assumptions.length){box.innerHTML='<div class="help">No assumptions saved yet.</div>';return;}
+  state.problem.assumptions.forEach(a=>{
+    const div=document.createElement('div'); div.className='item';
+    div.innerHTML=`<div class="content"><strong>${esc(a.text)}</strong><small>Test: ${esc(a.test)}</small></div><button class="iconbtn no-print" aria-label="Delete">✕</button>`;
+    $('button',div).onclick=()=>{state.problem.assumptions=state.problem.assumptions.filter(x=>x.id!==a.id);renderAssumptions();debounceSave()};
+    box.appendChild(div);
+  });
+}
+$('#splitAssumptions').onclick=()=>{
+  const lines=$('#assumptionInput').value.split('\n').map(x=>x.trim()).filter(Boolean);
+  lines.forEach(text=>state.problem.assumptions.push({id:uid(),text,test:`What observation or experiment would show that “${text}” is false?`}));
+  $('#assumptionInput').value='';renderAssumptions();debounceSave();toast(`${lines.length} assumption${lines.length===1?'':'s'} converted to tests`);
+};
+
+function reframeProblem(){
+  const p=state.problem.statement.trim()||'[your problem]';
+  const u=state.problem.user.trim()||'[the user]';
+  const out=state.problem.outcome.trim()||'[desired outcome]';
+  const reframes=[
+    `Outcome frame: How might ${u} achieve ${out} without inheriting the current solution architecture?`,
+    `Removal frame: If the dominant workaround disappeared tomorrow, what underlying function would still need to be performed?`,
+    `Inversion frame: What if the system prevented the problem instead of detecting or correcting it later?`,
+    `Constraint frame: Which “requirement” is actually a convention, and what becomes possible if it is removed?`,
+    `Scale frame: How does “${p}” change at 1/10× and 10× the current scale?`,
+    `Agency frame: Can the beneficiary perform, repair, understand or override the solution without a gatekeeper?`,
+    `Physics frame: Which flows of matter, energy and information create the problem, and which flow could be changed most cheaply?`,
+    `Measurement frame: What observable variable would prove the problem is getting better before the final outcome appears?`
+  ];
+  $('#reframeOutput').textContent=reframes.join('\n\n');
+  state.milestones.reframed=true;debounceSave();updateMetrics();
+}
+$('#reframeBtn').onclick=reframeProblem;
+$('#copyReframes').onclick=()=>copyText($('#reframeOutput').textContent);
+
+const attributes=['Speed','Accuracy','Strength','Weight','Cost','Energy use','Complexity','Reliability','Repairability','Safety','Capacity','Adaptability','Accessibility','Privacy','Material use','Noise','Waste','Setup time'];
+const principles=[
+  ['Segmentation','Divide the system into independent or replaceable modules.'],
+  ['Extraction','Separate a harmful, variable or expensive function from the rest.'],
+  ['Local quality','Let different regions/components have different properties.'],
+  ['Asymmetry','Replace symmetric assumptions with directionality or unequal geometry.'],
+  ['Merging','Combine adjacent operations, components or data paths.'],
+  ['Universality','Make one component perform multiple compatible functions.'],
+  ['Nested systems','Place one object, process or control loop inside another.'],
+  ['Counterbalance','Use buoyancy, spring force, stored energy or opposing loads to offset demand.'],
+  ['Pre-action','Perform setup, calibration, preloading or detection before demand peaks.'],
+  ['Equipotentiality','Rearrange the system so work against a field or gradient is minimized.'],
+  ['Feedback','Measure output and adapt inputs continuously or periodically.'],
+  ['Intermediary','Introduce a temporary layer, carrier, buffer, adapter or translator.'],
+  ['Self-service','Make the system maintain, clean, calibrate or configure itself where safe.'],
+  ['Copy / model','Use a model, simulation, proxy, digital representation or sacrificial test article.'],
+  ['Dynamics','Make geometry, parameters or roles adjustable rather than fixed.'],
+  ['Partial action','If the full effect is costly, deliver a sufficient fraction at lower complexity.'],
+  ['Another dimension','Use stacking, folding, depth, rotation or alternate topology.'],
+  ['Vibration / pulses','Replace steady input with periodic, pulsed or resonant action.'],
+  ['Continuity','Reduce starts/stops, dead time and repeated setup.'],
+  ['Fast passage','Make harmful exposure brief or move the operation through the risky region quickly.'],
+  ['Turn harm into benefit','Capture waste heat, vibration, by-products or error signals as resources.'],
+  ['Parameter change','Alter state, concentration, stiffness, pressure, temperature or timing.'],
+  ['Phase transition','Use switching between physical or logical states as part of the mechanism.'],
+  ['Composite','Combine materials, channels or methods so each handles what it does best.'],
+  ['Disposable sacrificial element','Let a cheap, replaceable component absorb wear or contamination.'],
+  ['Remote / non-contact','Move sensing, actuation or energy transfer away from the hazard or friction point.'],
+  ['Biological analogy','Study how living systems solve transport, sensing, repair, adhesion, filtering or coordination.'],
+  ['Information substitution','Replace matter/energy movement with sensing, prediction or control when possible.'],
+  ['Standard interfaces','Decouple modules through explicit, interoperable boundaries.']
+];
+$('#improveSelect').innerHTML=attributes.map(x=>`<option>${x}</option>`).join('');
+$('#worsenSelect').innerHTML=attributes.map(x=>`<option>${x}</option>`).join('');
+$('#worsenSelect').selectedIndex=4;
+$('#contradictionBtn').onclick=()=>{
+  const a=$('#improveSelect').value,b=$('#worsenSelect').value;
+  const seed=(attributes.indexOf(a)*11+attributes.indexOf(b)*7)%principles.length;
+  const picks=[0,5,11,17].map(n=>principles[(seed+n)%principles.length]);
+  $('#contradictionOutput').textContent=`Improve: ${a}\nAvoid worsening: ${b}\n\nExplore:\n`+picks.map((p,i)=>`${i+1}. ${p[0]} — ${p[1]}`).join('\n');
+  state.milestones.contradiction=true;debounceSave();updateMetrics();
+};
+
+const domains=['Biology / ecosystems','Aerospace','Architecture','Logistics','Telecommunications','Medicine','Agriculture','Robotics','Distributed computing','Games / incentives','Geology','Fluid systems','Manufacturing','Emergency response','Music / acoustics'];
+$('#domainSelect').innerHTML=domains.map(x=>`<option>${x}</option>`).join('');
+$('#transferBtn').onclick=()=>{
+  const f=$('#functionInput').value.trim()||'perform the target function';
+  const d=$('#domainSelect').value;
+  const qs=[
+    `How does ${d.toLowerCase()} accomplish an analogous function to “${f}” under severe constraints?`,
+    `Which mechanism from ${d.toLowerCase()} could be abstracted away from its original material and reused here?`,
+    `What does ${d.toLowerCase()} do when the main channel fails?`,
+    `How does ${d.toLowerCase()} sense state, allocate resources, repair errors or degrade gracefully?`,
+    `What would be the simplest physical or informational analogue—not a literal copy—of that mechanism?`
+  ];
+  $('#transferOutput').textContent=qs.join('\n\n');
+};
+
+const lensDeck=[
+  ['Invert the control loop','Move from “operator commands system” to “system reveals state and requests minimal intervention.”'],
+  ['Delete a component','Pick the most expensive or failure-prone component. Ask what function it really performs and replace the function, not the part.'],
+  ['Exploit a gradient','Use temperature, pressure, height, concentration, charge, time or demand differences already present.'],
+  ['Make it passive first','Ask whether geometry, materials or natural flows can do work currently assigned to powered control.'],
+  ['Modularize the failure','Design the smallest replaceable unit so one failure does not disable the whole system.'],
+  ['Turn a waste stream into an input','Map heat, vibration, rejected material, idle capacity or error signals to another useful function.'],
+  ['Shift from prevention to graceful degradation','Assume something will fail; design a bounded safe mode and rapid recovery.'],
+  ['Move intelligence to the edge','Ask what decisions can happen locally without centralized coordination.'],
+  ['Move intelligence out of the device','Ask if a simpler physical artifact plus external sensing/control beats embedded complexity.'],
+  ['Use time as a design variable','Pre-charge, pre-compute, batch, pulse, phase, stagger or schedule instead of sizing for the peak.'],
+  ['Separate sensing from actuation','Let sensing be cheap and distributed while actuation is sparse, or vice versa.'],
+  ['Make state legible','Expose hidden conditions with shape, color, sound, position, haptics or simple indicators.'],
+  ['Borrow from immune systems','Detect anomalies, contain locally, remember patterns and avoid global shutdown.'],
+  ['Borrow from mycelial networks','Use redundant paths, local exchange, modular growth and repair around damaged regions.'],
+  ['Borrow from bone','Put material where loads occur; remove it where it contributes little.'],
+  ['Borrow from river networks','Let branching geometry match flow demand and use gradients rather than pumps where feasible.'],
+  ['Design for reversible assembly','Prefer fasteners, clips, modular seals and accessible interfaces over permanent joining when lifecycle value exceeds cost.'],
+  ['Change the unit of ownership','Could the function be shared, pooled, leased, community-owned or provided as a utility rather than duplicated?'],
+  ['Replace precision with calibration','Use cheap variable parts plus measurement/calibration when manufacturing precision is expensive.'],
+  ['Replace hardware with information','Can prediction, routing, scheduling or feedback remove the need for additional physical capacity?'],
+  ['Replace information with physics','Can shape, compliance or material properties remove sensors, code or training?'],
+  ['Stage the transformation','Instead of one extreme step, use multiple mild steps with checkpoints.'],
+  ['Design from the repair tool backward','Start with the simplest field repair method, then constrain the product architecture to support it.'],
+  ['Design for novice success','Remove hidden sequencing and expert-only adjustment; make correct use obvious and wrong use recoverable.']
+];
+function dealLenses(n=8){
+  const shuffled=[...lensDeck].sort(()=>Math.random()-.5).slice(0,n);
+  shuffled.forEach(([title,text])=>state.ideas.push({id:uid(),title,text,createdAt:nowISO()}));
+  renderIdeas();debounceSave();updateMetrics();
+}
+$('#lensBtn').onclick=()=>dealLenses(8);
+$('#quickIdeaBtn').onclick=()=>{dealLenses(6);document.querySelector('#foundry').scrollIntoView({behavior:'smooth'})};
+$('#clearIdeas').onclick=()=>{state.ideas=[];renderIdeas();debounceSave()};
+function renderIdeas(){
+  const box=$('#ideaCards');box.innerHTML='';
+  if(!state.ideas.length){box.innerHTML='<div class="col-12 help">No generated lenses yet.</div>';return}
+  state.ideas.slice(-24).forEach(i=>{
+    const c=document.createElement('div');c.className='col-4 card';
+    c.innerHTML=`<div class="eyebrow">lens</div><h3>${esc(i.title)}</h3><p>${esc(i.text)}</p><button class="btn no-print">Promote to concept note</button>`;
+    $('button',c).onclick=()=>{const current=state.concept.summary.trim();state.concept.summary=(current?current+'\n\n':'')+`${i.title}: ${i.text}`;syncBindings('concept.summary');debounceSave();toast('Added to concept summary')};
+    box.appendChild(c);
+  });
+}
+
+function ensureMorphRows(){
+  if(!state.morphRows.length) state.morphRows=[
+    {id:uid(),name:'Sense / input',options:'manual observation, low-cost sensor, passive indicator'},
+    {id:uid(),name:'Core action',options:'mechanical, fluidic, thermal'},
+    {id:uid(),name:'Power / drive',options:'passive, human-powered, low-voltage electric'}
+  ];
+}
+function renderMorph(){
+  ensureMorphRows();
+  const box=$('#morphInputs');box.innerHTML='';
+  state.morphRows.forEach(r=>{
+    const div=document.createElement('div');div.className='morph-cell';
+    const nameId='morphName-'+r.id, optsId='morphOpts-'+r.id; // per-row ids: renderMorph() redraws all rows, so a static id would duplicate across rows
+    div.innerHTML=`<div class="grid"><div class="col-4"><label for="${nameId}">Subfunction</label><input id="${nameId}" type="text" value="${esc(r.name)}"></div><div class="col-8"><label for="${optsId}">Options <span class="help">comma-separated</span></label><input id="${optsId}" type="text" value="${esc(r.options)}"></div></div><button class="iconbtn no-print" style="margin-top:.5rem">Remove</button>`;
+    const ins=$$('input',div);ins[0].oninput=()=>{r.name=ins[0].value;debounceSave()};ins[1].oninput=()=>{r.options=ins[1].value;debounceSave()};
+    $('button',div).onclick=()=>{state.morphRows=state.morphRows.filter(x=>x.id!==r.id);renderMorph();debounceSave()};
+    box.appendChild(div);
+  });
+}
+$('#addMorphRow').onclick=()=>{state.morphRows.push({id:uid(),name:'',options:''});renderMorph();debounceSave()};
+$('#generateMorph').onclick=()=>{
+  const rows=state.morphRows.map(r=>({name:r.name.trim(),opts:r.options.split(',').map(x=>x.trim()).filter(Boolean)})).filter(r=>r.name&&r.opts.length);
+  const out=$('#morphOutput');out.innerHTML='';
+  if(rows.length<2){out.innerHTML='<div class="help">Add at least two usable rows.</div>';return}
+  for(let c=0;c<6;c++){
+    const div=document.createElement('div');div.className='morph-cell';
+    const combo=rows.map((r,i)=>[r.name,r.opts[(c*3+i*5)%r.opts.length]]);
+    div.innerHTML=`<strong>Configuration ${c+1}</strong><div class="help">${combo.map(x=>`${esc(x[0])}: ${esc(x[1])}`).join(' • ')}</div>`;
+    out.appendChild(div);
+  }
+  state.milestones.morphology=true;debounceSave();updateMetrics();
+};
+
+function renderExperiments(){
+  const box=$('#experimentList');box.innerHTML='';
+  if(!state.experiments.length){box.innerHTML='<div class="help">No experiments saved yet.</div>';return}
+  state.experiments.forEach((e,idx)=>{
+    const div=document.createElement('div');div.className='item';
+    div.innerHTML=`<div class="content"><strong>${idx+1}. ${esc(e.hypothesis||'Untitled experiment')}</strong><small>Metric: ${esc(e.metric||'—')} • Threshold: ${esc(e.threshold||'—')}<br>Method: ${esc(e.method||'—')}</small></div><button class="iconbtn no-print" aria-label="Delete experiment">✕</button>`;
+    $('button',div).onclick=()=>{state.experiments=state.experiments.filter(x=>x.id!==e.id);renderExperiments();debounceSave();updateMetrics()};
+    box.appendChild(div);
+  });
+}
+$('#addExperiment').onclick=()=>{
+  const e={id:uid(),hypothesis:$('#expHypothesis').value.trim(),iv:$('#expIV').value.trim(),metric:$('#expMetric').value.trim(),threshold:$('#expThreshold').value.trim(),stop:$('#expStop').value.trim(),method:$('#expMethod').value.trim(),risk:$('#expRisk').value.trim(),createdAt:nowISO()};
+  if(!e.hypothesis){toast('Add a hypothesis first');return}
+  state.experiments.push(e);['#expHypothesis','#expIV','#expMetric','#expThreshold','#expStop','#expMethod','#expRisk'].forEach(s=>$(s).value='');
+  renderExperiments();debounceSave();updateMetrics();toast('Experiment saved');
+};
+
+const safetyItems=[
+  ['userAgency','User can understand, override or safely stop the system.'],
+  ['failSafe','Known failures default to a bounded or safe state where feasible.'],
+  ['privacy','Data collection is minimized and explicit.'],
+  ['accessibility','Core use does not depend on a single sensory, cognitive or dexterity mode without accommodation.'],
+  ['repair','Repairability and field service have been considered.'],
+  ['misuse','Foreseeable misuse and dual-use pathways have been reviewed.'],
+  ['lifecycle','Materials, consumables and end-of-life impacts have been considered.'],
+  ['externalities','Costs/risks are not hidden by pushing them onto another group or ecosystem.'],
+  ['evidence','Performance claims are linked to evidence or clearly marked as hypotheses.']
+];
+function renderSafety(){
+  const box=$('#safetyChecks');box.innerHTML='';
+  safetyItems.forEach(([id,label])=>{
+    const l=document.createElement('label');l.style.cssText='display:flex;gap:.65rem;align-items:flex-start;font-weight:600';
+    l.innerHTML=`<input type="checkbox" ${state.safety.checks[id]?'checked':''} style="margin-top:.25rem"> <span>${esc(label)}</span>`;
+    $('input',l).onchange=e=>{state.safety.checks[id]=e.target.checked;debounceSave();updateMetrics()};
+    box.appendChild(l);
+  });
+}
+
+const scoreDefs=[
+  ['utility','Usefulness',1.4],['novelty','Novelty / differentiation',1.0],['feasibility','Feasibility',1.2],
+  ['safety','Safety / bounded failure',1.5],['inclusion','Accessibility / inclusion',0.8],['sustainability','Lifecycle / sustainability',1.0],
+  ['evidence','Evidence strength',1.4],['adoption','Adoption practicality',0.8]
+];
+function renderScores(){
+  const box=$('#scoreRows');box.innerHTML='';
+  scoreDefs.forEach(([id,label])=>{
+    const row=document.createElement('div');row.className='score-row';
+    row.innerHTML=`<label for="score-${id}" style="margin:0">${esc(label)}</label><input id="score-${id}" type="range" min="0" max="100" value="${state.scores[id]}"><output>${state.scores[id]}</output>`;
+    const r=$('input',row),o=$('output',row);r.oninput=()=>{state.scores[id]=+r.value;o.textContent=r.value;updateMetrics();debounceSave()};
+    box.appendChild(row);
+  });
+  updateMetrics();
+}
+function scoreTotal(){
+  let num=0,den=0;scoreDefs.forEach(([id,_,w])=>{num+=state.scores[id]*w;den+=w});return Math.round(num/den);
+}
+
+function renderEvidence(){
+  const box=$('#evidenceList');box.innerHTML='';
+  if(!state.evidence.length){box.innerHTML='<div class="help">No evidence logged yet.</div>';return}
+  state.evidence.forEach(ev=>{
+    const conf=+ev.confidence;const cls=conf>=75?'good':conf>=50?'warn':'bad';
+    const div=document.createElement('div');div.className='item';
+    div.innerHTML=`<div class="content"><strong>${esc(ev.type)} <span class="badge ${cls}">${conf}% confidence</span></strong><div>${esc(ev.summary)}</div><small>${esc(ev.source||'No source supplied')} • ${new Date(ev.createdAt).toLocaleString()}</small></div><button class="iconbtn no-print" aria-label="Delete evidence">✕</button>`;
+    $('button',div).onclick=()=>{state.evidence=state.evidence.filter(x=>x.id!==ev.id);renderEvidence();debounceSave();updateMetrics()};
+    box.appendChild(div);
+  });
+}
+$('#addEvidence').onclick=()=>{
+  const summary=$('#evSummary').value.trim(); if(!summary){toast('Add an evidence summary');return}
+  state.evidence.push({id:uid(),type:$('#evType').value,summary,source:$('#evSource').value.trim(),confidence:+$('#evConfidence').value,createdAt:nowISO()});
+  $('#evSummary').value='';$('#evSource').value='';renderEvidence();debounceSave();updateMetrics();toast('Evidence added');
+};
+
+$('#buildQueries').onclick=()=>{
+  const f=$('#paFunction').value.trim()||state.concept.function||'[function]';
+  const m=$('#paMechanism').value.trim()||state.concept.mechanism||'[mechanism]';
+  const c=$('#paContext').value.trim()||state.problem.context||'[context]';
+  const qs=[
+    `"${f}" ${m}`,
+    `"${f}" ${c} device OR system OR method`,
+    `${m} alternative mechanism ${f}`,
+    `${f} passive OR modular OR self-adjusting ${c}`,
+    `"${m}" patent`,
+    `${f} failure mode ${c}`,
+    `${f} biomimetic OR bio-inspired ${c}`,
+    `${f} low-cost repairable ${c}`
+  ];
+  $('#queryOutput').textContent=qs.join('\n');
+  state.milestones.priorart=true;debounceSave();updateMetrics();
+};
+
+const roadmapStages=[
+  ['Frame','Problem and beneficiary are observable; key constraints are explicit.'],
+  ['Explore','Multiple architectures have been generated; premature fixation is avoided.'],
+  ['Select','A concept has a mechanism-level spec and explicit trade-offs.'],
+  ['Prove','Minimum viable proof tests the riskiest assumption safely.'],
+  ['Validate','Relevant users/context produce repeatable evidence.'],
+  ['Engineer','Failure modes, tolerances, interfaces and serviceability are defined.'],
+  ['Pilot','Small deployment tests operations, adoption and maintenance.'],
+  ['Transfer','Documentation enables others to build, repair, audit or improve the system.']
+];
+function renderRoadmap(){
+  const box=$('#roadmapGrid');box.innerHTML='';
+  roadmapStages.forEach(([name,gate],i)=>{
+    const key='s'+i; const done=!!state.roadmap[key];
+    const c=document.createElement('div');c.className='col-3 card';
+    c.innerHTML=`<div class="eyebrow">stage ${i+1}</div><h3>${esc(name)}</h3><p>${esc(gate)}</p><label style="display:flex;gap:.45rem"><input type="checkbox" ${done?'checked':''}> Exit criterion met</label>`;
+    $('input',c).onchange=e=>{state.roadmap[key]=e.target.checked;debounceSave();updateMetrics()};
+    box.appendChild(c);
+  });
+}
+
+$('#generatePrompt').onclick=()=>{
+  const role=$('#promptRole').value,depth=$('#promptDepth').value;
+  const context=`Project: ${state.project.name||'[unnamed]' }\nProblem: ${state.problem.statement||'[not yet defined]' }\nConcept: ${state.concept.summary||'[not yet defined]' }\nCore mechanism: ${state.concept.mechanism||'[not yet defined]' }\nConstraints: ${state.problem.hardConstraints||'[none recorded]'}\nSafety bounds: ${state.problem.safetyBounds||'[none recorded]'}`;
+  const roleTask={
+    'Research analyst':'Find the strongest relevant evidence, adjacent approaches, unresolved uncertainties and conflicting findings. Separate established facts from inference. Propose a verification plan for each material uncertainty.',
+    'Mechanical / systems engineer':'Decompose the concept into functions, interfaces, flows of matter/energy/information, likely failure modes, tolerances, instrumentation needs and prototype options. Generate at least three materially different architectures.',
+    'Scientific skeptic':'Try to falsify the central assumptions. Identify confounders, alternative explanations, measurement traps and the cheapest decisive experiments.',
+    'Human factors reviewer':'Evaluate novice use, accessibility, cognitive load, failure recovery, maintenance burden, agency and likely misuse. Suggest design changes that improve legibility and control.',
+    'Safety reviewer':'Perform a hazard-oriented review covering foreseeable misuse, bounded failure, privacy/security where relevant, lifecycle impacts and externalities. Do not optimize performance by displacing harm.',
+    'Manufacturing engineer':'Assess manufacturability, assembly sequence, materials, tolerances, supply dependencies, repairability, quality control and pathways from bench prototype to small-batch pilot.',
+    'Prior-art researcher':'Generate a prior-art search plan spanning patents, papers, standards, products and adjacent mechanisms. Search by function and mechanism, not only by product name. Track overlaps and distinctive claim elements.',
+    'Adoption strategist':'Map stakeholders, switching costs, workflow disruption, incentives, procurement friction, trust requirements, training and measurable adoption triggers. Separate technical success from deployment success.'
+  }[role];
+  $('#promptOutput').textContent=`ROLE: ${role}\nDEPTH: ${depth}\n\nCONTEXT\n${context}\n\nTASK\n${roleTask}\n\nOUTPUT FORMAT\n1. What is known\n2. What is uncertain\n3. Competing architectures or explanations\n4. Evidence needed\n5. Failure / safety concerns\n6. Concrete next experiments or actions\n7. Sources or source-types to verify\n\nRULES\n- Mark facts, inferences, hypotheses and recommendations separately.\n- Do not invent citations, measurements or test results.\n- Prefer disconfirming evidence over agreement-seeking.\n- Preserve user agency and identify externalities.\n- End with the 3 highest-information next steps.`;
+};
+$('#copyPrompt').onclick=()=>copyText($('#promptOutput').textContent);
+
+function buildDossier(){
+  const s=scoreTotal();
+  const ev=state.evidence.map(e=>`<li><strong>${esc(e.type)}</strong> (${e.confidence}%): ${esc(e.summary)}${e.source?` — ${esc(e.source)}`:''}</li>`).join('')||'<li>No evidence recorded.</li>';
+  const ex=state.experiments.map(e=>`<li><strong>${esc(e.hypothesis)}</strong><br>Metric: ${esc(e.metric||'—')} • Threshold: ${esc(e.threshold||'—')}<br>Method: ${esc(e.method||'—')}</li>`).join('')||'<li>No experiments recorded.</li>';
+  const causes=state.problem.causes.filter(Boolean).map(x=>`<li>${esc(x)}</li>`).join('')||'<li>Not recorded.</li>';
+  const checked=safetyItems.filter(([id])=>state.safety.checks[id]).map(([,t])=>`<li>${esc(t)}</li>`).join('')||'<li>No safety checks marked complete.</li>';
+  $('#dossierOutput').innerHTML=`
+    <div class="eyebrow">Invention dossier • ${new Date().toLocaleDateString()}</div>
+    <h2>${esc(state.project.name||'Untitled invention')}</h2>
+    <p><strong>Decision score:</strong> ${s}/100 <span class="help">(heuristic, evidence-sensitive)</span></p>
+    <hr style="border:0;border-top:1px solid var(--line)">
+    <h3>Problem</h3><p>${esc(state.problem.statement||'Not recorded.')}</p>
+    <p><strong>Beneficiary:</strong> ${esc(state.problem.user||'—')}<br><strong>Context:</strong> ${esc(state.problem.context||'—')}<br><strong>Desired outcome:</strong> ${esc(state.problem.outcome||'—')}</p>
+    <h3>Causal layers</h3><ol>${causes}</ol>
+    <h3>Concept</h3><p>${esc(state.concept.summary||'Not recorded.')}</p>
+    <p><strong>Primary function:</strong> ${esc(state.concept.function||'—')}<br><strong>Mechanism:</strong> ${esc(state.concept.mechanism||'—')}<br><strong>Prototype medium:</strong> ${esc(state.concept.prototypeMedium||'—')}</p>
+    <h3>Minimum viable proof</h3><p>${esc(state.concept.mvpProof||'Not recorded.')}</p>
+    <h3>Evidence</h3><ul>${ev}</ul>
+    <h3>Experiments</h3><ol>${ex}</ol>
+    <h3>Safety + stewardship</h3><ul>${checked}</ul>
+    <p><strong>Foreseeable misuse:</strong> ${esc(state.safety.misuse||'Not recorded.')}<br><strong>Mitigations:</strong> ${esc(state.safety.mitigations||'Not recorded.')}<br><strong>Lifecycle:</strong> ${esc(state.safety.lifecycle||'Not recorded.')}</p>
+    <h3>Prior art / differentiation</h3><p><strong>Closest alternatives:</strong> ${esc(state.prior.closest||'Not recorded.')}<br><strong>Potential distinctions:</strong> ${esc(state.prior.distinctions||'Not recorded.')}</p>
+    <h3>Current constraints</h3><p>${esc(state.problem.hardConstraints||'No hard constraints recorded.')}</p>
+    <p class="help">Generated from the current local project state. Claims remain hypotheses unless supported by evidence entries or test results.</p>`;
+  state.milestones.dossier=true;debounceSave();updateMetrics();
+}
+$('#buildDossier').onclick=()=>{buildDossier();toast('Dossier refreshed')};
+$('#copyDossier').onclick=()=>copyText($('#dossierOutput').innerText);
+$('#printDossier').onclick=()=>{
+  buildDossier();
+  // Print only the dossier (plus the footer notes) for this print job; the class
+  // is removed afterwards, and a normal Ctrl/Cmd+P still prints the whole page.
+  // The timer is a defensive fallback alongside afterprint in case some browser's
+  // print flow doesn't fire it reliably -- whichever runs first wins, and either
+  // way nothing here affects normal (non-print) viewing either way.
+  document.body.classList.add('print-dossier');
+  const fallback=setTimeout(done,4000);
+  function done(){ document.body.classList.remove('print-dossier'); removeEventListener('afterprint',done); clearTimeout(fallback); }
+  addEventListener('afterprint',done);
+  window.print();
+};
+
+function dossierText(){
+  buildDossier();return $('#dossierOutput').innerText;
+}
+function copyText(text){
+  navigator.clipboard?.writeText(text).then(()=>toast('Copied')).catch(()=>{
+    const t=document.createElement('textarea');t.value=text;document.body.appendChild(t);t.select();document.execCommand('copy');t.remove();toast('Copied');
+  });
+}
+
+function syncBindings(path){
+  $$(`[data-bind="${path}"]`).forEach(el=>{el.value=getPath(state,path)??''});
+}
+function completion(){
+  const fields=[
+    state.project.name,state.problem.statement,state.problem.user,state.problem.outcome,state.problem.hardConstraints,
+    state.concept.summary,state.concept.function,state.concept.mechanism,state.concept.mvpProof,state.concept.failureModes,
+    state.safety.misuse,state.safety.mitigations,state.prior.closest,state.prior.distinctions
+  ];
+  let done=fields.filter(x=>String(x||'').trim()).length;
+  done+=Math.min(state.evidence.length,3);
+  done+=Math.min(state.experiments.length,2);
+  done+=Math.min(Object.values(state.roadmap).filter(Boolean).length,3);
+  done+=Math.min(Object.values(state.safety.checks).filter(Boolean).length,4);
+  const total=14+3+2+3+4;
+  return Math.round(done/total*100);
+}
+function updateMetrics(){
+  $('#metricIdeas').textContent=state.ideas.length;
+  $('#metricEvidence').textContent=state.evidence.length;
+  $('#metricExperiments').textContent=state.experiments.length;
+  const sc=scoreTotal();$('#metricScore').textContent=sc;$('#scoreValue').textContent=sc;$('#scoreCircle').style.setProperty('--score',sc);
+  const m=completion();$('#maturityPct').textContent=m+'%';$('#maturityBar').style.width=m+'%';
+  $('.progress[role="progressbar"]')?.setAttribute('aria-valuenow',m);
+  const stageEl=$('#hudStage'); if(stageEl) stageEl.textContent=hudStageName(m);
+  // [SCRIPT: HUD] / [SCRIPT: STARS] / [SCRIPT: INSIGHTS] all refresh from
+  // this single, already-frequently-called function rather than adding
+  // separate call sites throughout the pipeline logic above.
+  renderBadges();
+  renderConstellation();
+  renderInsights();
+}
+
+function exportJSON(){
+  const {ui,insights,...project}=state; // preferences + usage insights stay in this browser, by design
+  const blob=new Blob([JSON.stringify(project,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  const safe=(state.project.name||'invention-project').replace(/[^a-z0-9_-]+/gi,'-').replace(/^-|-$/g,'').toLowerCase();
+  a.download=`${safe||'invention-project'}-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(a.href);
+}
+$('#exportBtn').onclick=exportJSON;
+
+/* Importing is the one place this file ingests untrusted input, so it is
+   deliberately strict: a gentle size ceiling, a whitelist of known keys, a
+   shape check on each, and no way for a crafted file to set __proto__ or
+   constructor. Older exports (missing newer fields) still load, because
+   every sub-object is merged over the current defaults. */
+const PROJECT_KEYS=['project','problem','concept','safety','prior','scores','roadmap','milestones'];
+const PROJECT_LISTS=['ideas','morphRows','experiments','evidence'];
+const MAX_IMPORT_BYTES=5*1024*1024;
+const isObj=v=>!!v&&typeof v==='object'&&!Array.isArray(v);
+function safeAssign(target,src){ for(const k of Object.keys(src)){ if(k==='__proto__'||k==='constructor'||k==='prototype') continue; target[k]=src[k]; } return target; }
+function projectFrom(obj){
+  if(!isObj(obj)||obj.schema!==1||!isObj(obj.project)||!isObj(obj.problem)||!isObj(obj.concept)) throw new Error('Unsupported or invalid invention file.');
+  const base=structuredClone(DEFAULT_STATE), out={schema:1};
+  for(const k of PROJECT_KEYS) out[k]=isObj(obj[k])?safeAssign(base[k],obj[k]):base[k];
+  for(const k of PROJECT_LISTS) out[k]=Array.isArray(obj[k])?obj[k]:base[k];
+  return out;
+}
+/* A new / imported / reset project replaces the project CONTENT only. The
+   person's own theme, language and insights settings carry over, so a
+   teacher who switches to French keeps French for the next student. */
+function assembleState(project){
+  const s=Object.assign(structuredClone(DEFAULT_STATE),project,{ui:state.ui,insights:state.insights});
+  return s;
+}
+function freshProject(){
+  const s=assembleState({}); s.project.createdAt=s.project.updatedAt=nowISO(); return s;
+}
+$('#importFile').onchange=async e=>{
+  const f=e.target.files[0];if(!f)return;
+  try{
+    if(f.size>MAX_IMPORT_BYTES) throw new Error('That file is over 5 MB, far larger than any invention file this tool produces.');
+    state=assembleState(projectFrom(JSON.parse(await f.text())));
+    await DB.set(state);primeEarnedCache();renderAll();toast('Project imported');
+  }catch(err){toast(err instanceof SyntaxError?'That file is not valid JSON.':(err.message||'Import failed'))}
+  e.target.value='';
+};
+$('#resetBtn').onclick=async()=>{
+  if(!confirm('Reset the current invention project in this browser? Export first if you need a backup.'))return;
+  state=freshProject();await DB.set(state);primeEarnedCache();renderAll();toast('Project reset');
+};
+$('#newProjectBtn').onclick=async()=>{
+  if(!confirm('Start a new project? Export the current project first if you want to keep it.'))return;
+  state=freshProject();await DB.set(state);primeEarnedCache();renderAll();$('#problem').scrollIntoView({behavior:'smooth'});
+};
+
+function renderAll(){
+  primeEarnedCache(); // before this pass's updateMetrics() calls, so only genuinely new badges get celebrated
+  bindInputs();
+  renderCauses();renderAssumptions();renderIdeas();renderMorph();renderExperiments();renderSafety();renderScores();renderEvidence();renderRoadmap();updateMetrics();
+  document.documentElement.dataset.theme=state.ui.theme||lsGet('if-theme')||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');
+  applyLang(state.ui.lang||lsGet('if-lang')||detectLang(),false);
+  $('#footerDate').textContent=new Date().getFullYear();
+}
+
+$('#themeBtn').onclick=()=>{
+  const next=document.documentElement.dataset.theme==='dark'?'light':'dark';
+  document.documentElement.dataset.theme=next;state.ui.theme=next;lsSet('if-theme',next);debounceSave();
+};
+$$('[data-jump]').forEach(b=>b.onclick=()=>$(b.dataset.jump).scrollIntoView({behavior:'smooth'}));
+$$('[data-collapse]').forEach(b=>b.onclick=()=>{
+  const target=$('#'+b.dataset.collapse);const hidden=target.hidden=!target.hidden;b.textContent=hidden?t('expand'):t('collapse');
+});
+
+const navToggle=$('#navToggle');
+function setNav(open){document.body.classList.toggle('nav-open',open);navToggle.setAttribute('aria-expanded',String(open));navToggle.textContent=open?'✕':'☰'}
+navToggle.onclick=()=>setNav(!document.body.classList.contains('nav-open'));
+$$('.navlink').forEach(a=>a.addEventListener('click',()=>setNav(false)));
+document.addEventListener('click',e=>{if(document.body.classList.contains('nav-open')&&!$('#sidebar').contains(e.target)&&e.target!==navToggle)setNav(false)});
+
+const seenThisSession=new Set(); // [SCRIPT: INSIGHTS] -- count each section at most once per page load
+const observer=new IntersectionObserver(entries=>{
+  entries.forEach(e=>{
+    if(e.isIntersecting){
+      $$('.navlink').forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+e.target.id));
+      if(state.insights.enabled && !seenThisSession.has(e.target.id)){
+        seenThisSession.add(e.target.id);
+        state.insights.sectionViews[e.target.id]=(state.insights.sectionViews[e.target.id]||0)+1;
+        debounceSave(); renderInsights();
+      }
+    }
+  })
+},{rootMargin:'-30% 0px -60% 0px',threshold:.02});
+$$('main section[id]').forEach(s=>observer.observe(s)); // .intro is a <section id="intro">, so it's already included
+
+function openSearch(){
+  $('#searchDialog').showModal();$('#globalSearch').focus();runSearch('');
+}
+function runSearch(q){
+  q=q.trim().toLowerCase();const items=$$('.section, .hero').map(sec=>({
+    id:sec.id,title:($('h2',sec)||$('h1',sec))?.textContent||sec.id,
+    text:(sec.dataset.search||'')+' '+sec.innerText
+  })).filter(x=>!q||x.text.toLowerCase().includes(q));
+  $('#searchResults').innerHTML=items.map(x=>`<button class="search-hit" data-id="${esc(x.id)}" style="text-align:left;color:var(--ink);width:100%"><strong>${esc(x.title)}</strong><div class="help">#${esc(x.id)}</div></button>`).join('')||'<div class="help">No matching sections.</div>';
+  $$('.search-hit').forEach(b=>b.onclick=()=>{$('#searchDialog').close();$('#'+b.dataset.id).scrollIntoView({behavior:'smooth'})});
+}
+$('#searchBtn').onclick=openSearch;$('#closeSearch').onclick=()=>$('#searchDialog').close();$('#globalSearch').oninput=e=>runSearch(e.target.value);
+document.addEventListener('keydown',e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();openSearch()}
+  if(e.key==='Escape')setNav(false);
+});
+
+function initStars(){
+  const canvas=$('#stars'),ctx=canvas&&canvas.getContext&&canvas.getContext('2d');let points=[];
+  if(!ctx) return; // no canvas support: the page simply has no ambient starfield
+  function resize(){const d=Math.min(devicePixelRatio||1,2);canvas.width=innerWidth*d;canvas.height=innerHeight*d;canvas.style.width=innerWidth+'px';canvas.style.height=innerHeight+'px';ctx.setTransform(d,0,0,d,0,0);points=Array.from({length:Math.min(140,Math.floor(innerWidth*innerHeight/12000))},()=>({x:Math.random()*innerWidth,y:Math.random()*innerHeight,r:Math.random()*1.4+.2,v:Math.random()*.08+.02}))}
+  function frame(){ctx.clearRect(0,0,innerWidth,innerHeight);const accent=getComputedStyle(document.documentElement).getPropertyValue('--accent');ctx.fillStyle=accent;for(const p of points){p.y-=p.v;if(p.y<0)p.y=innerHeight;ctx.globalAlpha=.25+p.r/2;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill()}requestAnimationFrame(frame)}
+  resize();addEventListener('resize',resize);if(!matchMedia('(prefers-reduced-motion: reduce)').matches)frame();
+}
+
+/* ============================================================
+   [SCRIPT: I18N] -- English / French, selector-driven, no build step
+   ============================================================
+   Two deliberately simple mechanisms instead of a full i18n framework,
+   because this file has no bundler and no network fetch:
+     1) STATIC_TEXT -- [selector, english, french, mode] for text that
+        never changes at runtime: nav, section headers, static button
+        labels, footer, splash, facilitator copy. mode is omitted for a
+        plain textContent swap, 'html' for entries whose element carries
+        nested markup that must survive the swap (the numbered nav links,
+        the hero heading, the footer notes), or 'placeholder' for an
+        input's placeholder text.
+     2) DYNAMIC_TEXT -- a small dictionary, read through t('key'), for
+        the handful of strings the script itself generates while it
+        runs: the save-status pill, the collapse/expand toggle, and the
+        HUD stage names.
+   Per-field microcopy (placeholders inside the 13 pipeline sections,
+   the small helper sentences inside individual cards, and toast
+   confirmations) is intentionally left in English in this pass -- see
+   the extension note at the very top of this file. A selector that
+   matches nothing, or a French cell left blank, silently falls back to
+   English rather than showing something broken. */
+const STATIC_TEXT=[
+ // Header / brand
+ ['.brandtext strong','Invention Foundry','Fonderie d’invention'],
+ ['.brandtext small','Problem → Principle → Prototype → Proof','Problème → Principe → Prototype → Preuve'],
+ ['.splash-tag','Problem → Principle → Prototype → Proof','Problème → Principe → Prototype → Preuve'],
+ ['#searchBtn','⌕ Search','⌕ Rechercher'],
+ ['.header [data-jump="#dossier"]','Build dossier','Créer le dossier'],
+ ['#saveState','Local autosave','Sauvegarde locale automatique'],
+ // Sidebar HUD
+ ['#maturityLabel','Invention maturity','Maturité de l’invention'],
+ ['#maturityHint','progress reflects completed invention fields, not commercial readiness.','la progression reflète les champs remplis, pas la maturité commerciale.'],
+ ['#constellationLabel','Concept constellation','Constellation du concept'],
+ ['#constellationSub','Brightness reflects how filled in that part is.','La luminosité reflète le degré de complétion de cette partie.'],
+ ['#badgeLabel','Milestones','Étapes clés'],
+ // Nav groups + links
+ ['.nav-group:nth-of-type(1) h2','Discover','Découvrir'],
+ ['.nav-group:nth-of-type(2) h2','Engineer','Concevoir'],
+ ['.nav-group:nth-of-type(3) h2','Validate','Valider'],
+ ['.nav-group:nth-of-type(4) h2','Ship knowledge','Diffuser'],
+ ['.navlink[href="#dashboard"]','<span class="num">00</span>Dashboard','<span class="num">00</span>Tableau de bord','html'],
+ ['.navlink[href="#problem"]','<span class="num">01</span>Problem Lab','<span class="num">01</span>Laboratoire du problème','html'],
+ ['.navlink[href="#foundry"]','<span class="num">02</span>Idea Foundry','<span class="num">02</span>Fonderie d’idées','html'],
+ ['.navlink[href="#morphology"]','<span class="num">03</span>Morphology','<span class="num">03</span>Morphologie','html'],
+ ['.navlink[href="#concept"]','<span class="num">04</span>Concept Spec','<span class="num">04</span>Cahier des charges','html'],
+ ['.navlink[href="#experiment"]','<span class="num">05</span>Experiment Studio','<span class="num">05</span>Atelier d’expériences','html'],
+ ['.navlink[href="#safety"]','<span class="num">06</span>Safety + Stewardship','<span class="num">06</span>Sécurité et intendance','html'],
+ ['.navlink[href="#score"]','<span class="num">07</span>Decision Matrix','<span class="num">07</span>Matrice de décision','html'],
+ ['.navlink[href="#evidence"]','<span class="num">08</span>Evidence Ledger','<span class="num">08</span>Registre des preuves','html'],
+ ['.navlink[href="#priorart"]','<span class="num">09</span>Prior Art','<span class="num">09</span>Art antérieur','html'],
+ ['.navlink[href="#roadmap"]','<span class="num">10</span>Roadmap','<span class="num">10</span>Feuille de route','html'],
+ ['.navlink[href="#prompts"]','<span class="num">11</span>Prompt Chains','<span class="num">11</span>Chaînes d’invites','html'],
+ ['.navlink[href="#dossier"]','<span class="num">12</span>Invention Dossier','<span class="num">12</span>Dossier d’invention','html'],
+ ['.navlink[href="#data"]','<span class="num">13</span>Data + Backup','<span class="num">13</span>Données et sauvegarde','html'],
+ ['.navlink[href="#facilitator"]','<span class="num">14</span>Facilitator & Rollout','<span class="num">14</span>Animation et déploiement','html'],
+ // Hero / dashboard
+ ['#dashboard .eyebrow','Innovation operating system • private by default','Système d’exploitation de l’innovation • privé par défaut'],
+ ['#dashboard h1','Turn a fuzzy idea into a <span style="color:var(--accent)">testable invention</span>.','Transformez une idée floue en <span style="color:var(--accent)">invention testable</span>.','html'],
+ ['#dashboard>p','Use structured reframing, contradiction prompts, cross-domain transfer, morphology, evidence, experiments and risk checks to move from “interesting thought” to a documented concept that can be tested, compared and improved.','Utilisez la reformulation structurée, les invites de contradiction, le transfert interdomaines, la morphologie, les preuves, les expériences et les vérifications de risque pour transformer une « pensée intéressante » en un concept documenté, testable, comparable et perfectible.'],
+ ['#dashboard [data-jump="#problem"]','Start with the problem','Commencer par le problème'],
+ ['#newProjectBtn','New project','Nouveau projet'],
+ ['#quickIdeaBtn','⚡ Generate idea lenses','⚡ Générer des angles d’idées'],
+ ['#metricIdeas + small','generated concept lenses','angles de concept générés'],
+ ['#metricEvidence + small','evidence entries','entrées de preuves'],
+ ['#metricExperiments + small','experiment plans','plans d’expérience'],
+ ['#metricScore + small','decision score / 100','score de décision / 100'],
+ // Parallax intro
+ ['#intro .intro-beat:nth-of-type(1) .eyebrow','Before the tool','Avant l’outil'],
+ ['#intro .intro-beat:nth-of-type(1) h2','Most good ideas die of paperwork, not physics.','La plupart des bonnes idées meurent de paperasse, pas de physique.'],
+ ['#intro .intro-beat:nth-of-type(1) p','A resident notices a real problem. A student sees an obvious fix. A civil servant knows exactly where a process breaks. What\'s usually missing isn\'t cleverness — it\'s a shared, rigorous, low-cost way to turn that noticing into a documented concept that a school, a council or a company can actually evaluate. That is the entire job of this file.','Un résident remarque un vrai problème. Un élève voit une solution évidente. Un fonctionnaire sait exactement où un processus se brise. Ce qui manque n’est presque jamais l’ingéniosité — c’est une façon partagée, rigoureuse et peu coûteuse de transformer ce constat en un concept documenté qu’une école, un conseil ou une entreprise peut réellement évaluer. C’est tout le rôle de ce fichier.'],
+ ['#intro .intro-beat:nth-of-type(2) .eyebrow','Three ways in','Trois portes d’entrée'],
+ ['#intro .intro-beat:nth-of-type(2) h2','Built to be used alone, or handed to a room full of people.','Conçu pour être utilisé seul, ou remis à une salle pleine de monde.'],
+ ['#intro .intro-cards .card:nth-of-type(1) h3','One inventor','Un seul inventeur'],
+ ['#intro .intro-cards .card:nth-of-type(1) p','Work section by section at your own pace. Everything typed here stays on this device.','Avancez section par section, à votre rythme. Tout ce qui est saisi ici reste sur cet appareil.'],
+ ['#intro .intro-cards .card:nth-of-type(2) h3','A classroom or cohort','Une classe ou une cohorte'],
+ ['#intro .intro-cards .card:nth-of-type(2) p','A teacher or facilitator can run the pipeline as a single session or a multi-week unit — see the Facilitator section near the end.','Un enseignant ou un animateur peut dérouler le parcours en une seule séance ou sur plusieurs semaines — voir la section Animation, vers la fin.'],
+ ['#intro .intro-cards .card:nth-of-type(3) h3','An institution or policy team','Une institution ou une équipe de politiques publiques'],
+ ['#intro .intro-cards .card:nth-of-type(3) p','Adopt the same structure as a shared intake standard for reviewing proposals, without adopting any particular proposal\'s conclusions.','Adoptez la même structure comme norme commune d’accueil pour l’examen des propositions, sans adopter les conclusions d’une proposition en particulier.'],
+ ['#intro .intro-beat:nth-of-type(3) .eyebrow','Before you start','Avant de commencer'],
+ ['#intro .intro-beat:nth-of-type(3) h2','Optimizing anything can go wrong. This file is built to make that visible, not hide it.','Optimiser quoi que ce soit peut mal tourner. Ce fichier est conçu pour le rendre visible, pas pour le cacher.'],
+ ['#intro .intro-beat:nth-of-type(3) p','Every project here carries a Safety + Stewardship gate: foreseeable misuse, lifecycle impact, accessibility, and who could be harmed if the concept works exactly as intended. It isn\'t a checkbox to clear quickly — it\'s the same discipline the rest of the tool applies to novelty and feasibility, applied to consequences.','Chaque projet ici comporte un jalon Sécurité et intendance : mésusage prévisible, impact du cycle de vie, accessibilité, et qui pourrait être lésé si le concept fonctionne exactement comme prévu. Ce n’est pas une case à cocher rapidement — c’est la même rigueur que l’outil applique à la nouveauté et à la faisabilité, appliquée aux conséquences.'],
+ ['#intro [data-jump="#dashboard"]','Open the workbook','Ouvrir le classeur'],
+ // Section 01-14 headers
+ ['#problem .section-head .eyebrow','01 • Problem Lab','01 • Laboratoire du problème'],
+ ['#problem .section-head h2','Define the problem before defending a solution.','Définir le problème avant de défendre une solution.'],
+ ['#problem .section-head p','Make the need observable, bounded and falsifiable. Separate symptoms, root causes, assumptions and constraints.','Rendez le besoin observable, borné et falsifiable. Séparez symptômes, causes profondes, hypothèses et contraintes.'],
+ ['#foundry .section-head .eyebrow','02 • Idea Foundry','02 • Fonderie d’idées'],
+ ['#foundry .section-head h2','Generate concepts through mechanisms, not adjectives.','Générez des concepts par des mécanismes, pas des adjectifs.'],
+ ['#foundry .section-head p','Use innovation lenses that deliberately change architecture, information flow, materials, control, timing or scale.','Utilisez des angles d’innovation qui modifient délibérément l’architecture, le flux d’information, les matériaux, le contrôle, le rythme ou l’échelle.'],
+ ['#morphology .section-head .eyebrow','03 • Morphology','03 • Morphologie'],
+ ['#morphology .section-head h2','Explore the design space systematically.','Explorez systématiquement l’espace de conception.'],
+ ['#morphology .section-head p','Break the invention into subfunctions, list multiple ways to satisfy each, then generate configurations.','Décomposez l’invention en sous-fonctions, listez plusieurs façons de satisfaire chacune, puis générez des configurations.'],
+ ['#concept .section-head .eyebrow','04 • Concept Spec','04 • Cahier des charges'],
+ ['#concept .section-head h2','Describe what the invention does and how it does it.','Décrivez ce que fait l’invention et comment elle le fait.'],
+ ['#concept .section-head p','Write a mechanism-level specification before polishing branding or pitch language.','Rédigez une spécification au niveau du mécanisme avant de peaufiner l’image de marque ou le discours de présentation.'],
+ ['#experiment .section-head .eyebrow','05 • Experiment Studio','05 • Atelier d’expériences'],
+ ['#experiment .section-head h2','Convert beliefs into falsifiable tests.','Transformez vos convictions en tests falsifiables.'],
+ ['#experiment .section-head p','Define the hypothesis, measured variable, acceptance threshold, method and stopping condition before looking at results.','Définissez l’hypothèse, la variable mesurée, le seuil d’acceptation, la méthode et la condition d’arrêt avant de regarder les résultats.'],
+ ['#safety .section-head .eyebrow','06 • Safety + Stewardship','06 • Sécurité et intendance'],
+ ['#safety .section-head h2','Optimize without externalizing harm.','Optimisez sans externaliser le préjudice.'],
+ ['#safety .section-head p','Check foreseeable misuse, lifecycle impacts, accessibility, privacy, reversibility and repairability alongside performance.','Vérifiez le mésusage prévisible, les impacts du cycle de vie, l’accessibilité, la confidentialité, la réversibilité et la réparabilité, en parallèle de la performance.'],
+ ['#score .section-head .eyebrow','07 • Decision Matrix','07 • Matrice de décision'],
+ ['#score .section-head h2','Score the concept, then inspect why.','Notez le concept, puis examinez pourquoi.'],
+ ['#score .section-head p','This is a thinking aid—not an objective truth. Adjust sliders as evidence improves.','C’est une aide à la réflexion, pas une vérité objective. Ajustez les curseurs à mesure que les preuves s’améliorent.'],
+ ['#evidence .section-head .eyebrow','08 • Evidence Ledger','08 • Registre des preuves'],
+ ['#evidence .section-head h2','Separate what is known from what is hoped.','Séparez ce qui est su de ce qui est espéré.'],
+ ['#evidence .section-head p','Log observations, tests, user evidence and external references with confidence and relevance.','Consignez observations, tests, témoignages d’utilisateurs et références externes, avec leur niveau de confiance et de pertinence.'],
+ ['#priorart .section-head .eyebrow','09 • Prior Art','09 • Art antérieur'],
+ ['#priorart .section-head h2','Search before claiming novelty.','Cherchez avant de revendiquer la nouveauté.'],
+ ['#priorart .section-head p','Generate neutral search queries around function, mechanism, geometry, materials and use context. Record what overlaps and what remains distinct.','Générez des requêtes de recherche neutres autour de la fonction, du mécanisme, de la géométrie, des matériaux et du contexte d’usage. Notez ce qui chevauche et ce qui reste distinct.'],
+ ['#roadmap .section-head .eyebrow','10 • Roadmap','10 • Feuille de route'],
+ ['#roadmap .section-head h2','Move by evidence gates, not excitement alone.','Avancez par jalons de preuve, pas seulement par enthousiasme.'],
+ ['#roadmap .section-head p','Each stage has an exit criterion. Advance only when the relevant uncertainty is reduced enough.','Chaque étape a un critère de sortie. N’avancez que lorsque l’incertitude concernée est suffisamment réduite.'],
+ ['#prompts .section-head .eyebrow','11 • Prompt Chains','11 • Chaînes d’invites'],
+ ['#prompts .section-head h2','Use AI as a panel of roles, not a single oracle.','Utilisez l’IA comme un panel de rôles, pas comme un oracle unique.'],
+ ['#prompts .section-head p','Generate structured prompts that force separate passes for research, engineering, critique, experiment design and synthesis.','Générez des invites structurées qui imposent des passes distinctes pour la recherche, l’ingénierie, la critique, la conception d’expériences et la synthèse.'],
+ ['#dossier .section-head .eyebrow','12 • Invention Dossier','12 • Dossier d’invention'],
+ ['#dossier .section-head h2','Compile your current invention record.','Compilez votre dossier d’invention actuel.'],
+ ['#dossier .section-head p','Create a portable, printable snapshot of the problem, concept, evidence, experiments, safety notes and next steps.','Créez un instantané portable et imprimable du problème, du concept, des preuves, des expériences, des notes de sécurité et des prochaines étapes.'],
+ ['#data .section-head .eyebrow','13 • Data + Backup','13 • Données et sauvegarde'],
+ ['#data .section-head h2','Keep your invention data portable.','Gardez vos données d’invention portables.'],
+ ['#data .section-head p','Data is saved in this browser using IndexedDB, with lightweight preferences in localStorage. Export JSON for durable backup or transfer.','Les données sont enregistrées dans ce navigateur via IndexedDB, avec des préférences légères dans localStorage. Exportez en JSON pour une sauvegarde ou un transfert durable.'],
+ ['#facilitator .section-head .eyebrow','14 • Facilitator & Rollout','14 • Animation et déploiement'],
+ ['#facilitator .section-head h2','Hand this to a room, not just a person.','Remettez ceci à une salle, pas seulement à une personne.'],
+ ['#facilitator .section-head p','Guidance for running this tool with a class, a team, or as a standard intake pattern inside an institution — without changing anything about how any single project\'s data is handled.','Des repères pour utiliser cet outil avec une classe, une équipe, ou comme modèle d’accueil normalisé au sein d’une institution — sans rien changer à la façon dont les données d’un projet donné sont traitées.'],
+ // Facilitator card headings + agenda card
+ ['#facilitator .card:nth-of-type(1) h3','One class period (45-75 minutes)','Une période de cours (45 à 75 minutes)'],
+ ['#facilitator .card:nth-of-type(2) h3','Multi-week unit','Unité sur plusieurs semaines'],
+ ['#facilitator .card:nth-of-type(3) h3','For an institution or policy team','Pour une institution ou une équipe de politiques publiques'],
+ ['#facilitator .card:nth-of-type(4) h3','Student and participant privacy','Confidentialité des élèves et des participants'],
+ ['#facilitator .card:nth-of-type(5) h3','Printable one-page agenda','Ordre du jour imprimable d’une page'],
+ ['#copyAgenda','Copy','Copier'],
+ // Buttons across the pipeline
+ ['#splitAssumptions','Convert to tests','Convertir en tests'],
+ ['#reframeBtn','Generate reframes','Générer des reformulations'],
+ ['#copyReframes','Copy','Copier'],
+ ['#contradictionBtn','Resolve contradiction','Résoudre la contradiction'],
+ ['#transferBtn','Generate transfer prompts','Générer des invites de transfert'],
+ ['#lensBtn','Deal 8 lenses','Distribuer 8 angles'],
+ ['#clearIdeas','Clear generated','Effacer les idées générées'],
+ ['#addMorphRow','+ Add subfunction','+ Ajouter une sous-fonction'],
+ ['#generateMorph','Generate configurations','Générer des configurations'],
+ ['#addExperiment','Save experiment','Enregistrer l’expérience'],
+ ['#buildQueries','Build queries','Générer les requêtes'],
+ ['#addEvidence','Add evidence','Ajouter une preuve'],
+ ['#generatePrompt','Generate prompt','Générer l’invite'],
+ ['#copyPrompt','Copy','Copier'],
+ ['#buildDossier','Refresh dossier','Actualiser le dossier'],
+ ['#copyDossier','Copy text','Copier le texte'],
+ ['#printDossier','Print / Save PDF','Imprimer / Enregistrer en PDF'],
+ ['#exportBtn','Export JSON','Exporter en JSON'],
+ ['label[for="importFile"]','Import JSON','Importer un JSON'],
+ ['#resetBtn','Reset current project','Réinitialiser le projet actuel'],
+ // Search dialog
+ ['#searchDialog h2','Search this OS','Rechercher dans cet outil'],
+ ['label[for="globalSearch"]','Search sections, methods and features','Rechercher des sections, méthodes et fonctionnalités'],
+ ['#globalSearch','e.g., evidence, prototype, prior art','ex. : preuve, prototype, art antérieur','placeholder'],
+ // Local insights panel + Data section notes
+ ['#insightsTitle','Local usage insights <span class="help">(off by default)</span>','Statistiques d’usage locales <span class="help">(désactivées par défaut)</span>','html'],
+ ['#insightsDesc','If turned on, this counts which sections you open and roughly how long the tab stays active in this browser only — never sent anywhere, and there\'s no code path in this file that could send it anywhere. Turn it off or clear it at any time.','Si vous l’activez, ceci compte les sections que vous ouvrez et, approximativement, la durée d’activité de l’onglet, dans ce navigateur seulement — rien n’est jamais envoyé, et aucun chemin de code de ce fichier ne pourrait l’envoyer. Désactivez ou effacez ces données à tout moment.'],
+ ['#insightsToggleText','Track local usage insights','Suivre les statistiques d’usage locales'],
+ ['#insightsClear','Clear insights','Effacer les statistiques'],
+ ['#backupNote','Exports include your invention fields, evidence, experiments, generated ideas, checklist state, scoring and milestone progress. They never include your display preferences or your local usage insights, and importing a file never changes your own preferences.','Les exportations incluent vos champs d’invention, preuves, expériences, idées générées, cases cochées, notes et progression des étapes clés. Elles n’incluent jamais vos préférences d’affichage ni vos statistiques d’usage locales, et l’importation d’un fichier ne modifie jamais vos propres préférences.'],
+ ['#resetNote','This affects only this browser profile, and only the project content: your theme, language and insights settings stay as they are. Export first if the project matters.','Ceci n’affecte que ce profil de navigateur, et seulement le contenu du projet : votre thème, votre langue et vos réglages de statistiques restent tels quels. Exportez d’abord si le projet compte.'],
+ // Footer: zero-harm note, Attributions & Licensing, built-for line
+ ['.footer .privacy','<strong>Zero-Harm / Anti-Inversion:</strong> invention is treated as stewardship. Do not optimize a metric by shifting costs, risks or loss of agency onto people, communities, ecosystems or future users. The milestone badges and constellation in the sidebar follow the same rule: they only ever mark real progress back to you — they never decay, compare you to anyone else, or manufacture urgency.','<strong>Zéro préjudice / anti-inversion :</strong> l’invention est traitée comme une intendance. N’optimisez jamais une mesure en déplaçant des coûts, des risques ou une perte d’autonomie vers des personnes, des communautés, des écosystèmes ou de futurs utilisateurs. Les badges et la constellation dans la barre latérale suivent la même règle : ils ne font que refléter une progression réelle — ils ne se dégradent jamais, ne vous comparent à personne, et ne créent aucune urgence artificielle.','html'],
+ ['#attribTitle','Attributions & Licensing','Attributions et licences'],
+ ['#attribCode','<strong>Code:</strong> written for this file. No third-party libraries, fonts, icons, images or trackers are bundled, so no third-party license terms apply inside it. It draws only on your device\'s own system fonts and standard Unicode symbols.','<strong>Code :</strong> rédigé pour ce fichier. Aucune bibliothèque, police, icône, image ni traceur tiers n’est intégré ; aucune condition de licence tierce ne s’applique donc à l’intérieur. Il n’utilise que les polices système de votre appareil et des symboles Unicode standard.','html'],
+ ['#attribPatterns','<strong>Patterns, not code:</strong> a command-palette-style search dialog, a scroll-aware table of contents, single-document IndexedDB persistence and accessible dialog and disclosure behaviour are common, openly documented web conventions (for example the W3C WAI-ARIA Authoring Practices). They are re-implemented here from their public descriptions; nothing was copied from a restricted or unlicensed codebase.','<strong>Des modèles, pas du code :</strong> une boîte de recherche de type palette de commandes, une table des matières sensible au défilement, la persistance IndexedDB en document unique et des comportements accessibles de dialogue et de repliage sont des conventions web courantes et publiquement documentées (par exemple les WAI-ARIA Authoring Practices du W3C). Elles sont réimplémentées ici à partir de leurs descriptions publiques ; rien n’a été copié d’un code source restreint ou sans licence.','html'],
+ ['#attribMethods','<strong>Methods credited:</strong> morphological analysis (Fritz Zwicky), the inventive-principles tradition of TRIZ (Genrich Altshuller and colleagues), falsifiability (Karl Popper) and biomimicry as a design practice (popularized by Janine Benyus). They are referenced descriptively; no proprietary tables, matrices or text are reproduced.','<strong>Méthodes créditées :</strong> l’analyse morphologique (Fritz Zwicky), la tradition des principes inventifs de la TRIZ (Genrich Altshuller et ses collègues), la falsifiabilité (Karl Popper) et le biomimétisme comme pratique de conception (popularisé par Janine Benyus). Elles sont mentionnées à titre descriptif ; aucune table, matrice ou texte propriétaire n’est reproduit.','html'],
+ ['#attribAdapt','<strong>If you adapt this file:</strong> keep the Zero-Harm / Anti-Inversion note and this section with it, and add notices for anything third-party that you introduce.','<strong>Si vous adaptez ce fichier :</strong> conservez avec lui la note Zéro préjudice / anti-inversion et cette section, et ajoutez des mentions pour tout élément tiers que vous introduisez.','html'],
+ ['#insightsNote','Local usage insights, if turned on in Data + Backup, are optional, local-only and resettable in one click; they default to off, nothing about them is ever sent anywhere, and exports never include them.','Les statistiques d’usage locales, si vous les activez dans Données et sauvegarde, sont facultatives, strictement locales et effaçables en un clic ; elles sont désactivées par défaut, rien à leur sujet n’est jamais envoyé ailleurs, et les exportations ne les incluent jamais.'],
+ ['#footerBuiltForText','Built for portable local use','Conçu pour un usage local portable'],
+];
+
+/* Small dictionary for strings the script generates while it runs.
+   Referenced through t('key'); an unknown key returns itself so a typo
+   fails visibly rather than silently. */
+const DYNAMIC_TEXT={
+  savingEllipsis:{en:'Saving…',fr:'Enregistrement…'},
+  savedLocally:{en:'Saved locally',fr:'Enregistré localement'},
+  saveFailed:{en:'Save failed',fr:'Échec de l’enregistrement'},
+  collapse:{en:'Collapse',fr:'Réduire'},
+  expand:{en:'Expand',fr:'Développer'},
+  stage0:{en:'Getting oriented',fr:'En orientation'},
+  stage1:{en:'Framing',fr:'Cadrage'},
+  stage2:{en:'Engineering',fr:'Ingénierie'},
+  stage3:{en:'Validating',fr:'Validation'},
+  stage4:{en:'Ready to ship',fr:'Prêt à diffuser'},
+  starsLit:{en:'stars lit',fr:'étoiles allumées'},
+  offline:{en:'Offline',fr:'Hors ligne'}
+};
+function t(key){ const row=DYNAMIC_TEXT[key]; if(!row) return key; return (currentLang==='fr'&&row.fr)?row.fr:row.en; }
+
+/* currentLang is what is on screen right now. state.ui.lang is different:
+   it is only ever set by an explicit click on the language button, so a
+   first-time visitor whose browser is set to French sees French without
+   the file having "decided" anything on their behalf. */
+let currentLang='en';
+function detectLang(){ try{ return /^fr\b/i.test(navigator.language||'')?'fr':'en'; }catch(e){ return 'en'; } }
+function applyLang(lang,explicit){
+  lang=(lang==='fr')?'fr':'en';
+  currentLang=lang;
+  document.documentElement.lang=lang;            // so screen readers pronounce the page correctly
+  document.documentElement.dataset.lang=lang;
+  if(explicit){
+    state.ui.lang=lang;
+    lsSet('if-lang',lang);
+  }
+  STATIC_TEXT.forEach(([sel,en,fr,mode])=>{
+    const el=$(sel); if(!el) return;
+    const val=(lang==='fr'&&fr)?fr:en;
+    if(mode==='html') el.innerHTML=val;
+    else if(mode==='placeholder') el.placeholder=val;
+    else el.textContent=val;
+  });
+  const lb=$('#langBtn');
+  if(lb){
+    lb.textContent = lang==='fr' ? 'English' : 'Français';
+    lb.lang = lang==='fr' ? 'en' : 'fr';          // the label is in the *other* language
+    lb.setAttribute('aria-label', lang==='fr' ? 'Switch to English' : 'Passer au français');
+  }
+  updateNet();
+  updateMetrics(); // refreshes anything read through t(): HUD stage name, constellation label
+}
+$('#langBtn').onclick=()=>{ applyLang(currentLang==='fr'?'en':'fr',true); debounceSave(); };
+
+/* Offline indicator: purely informational. Nothing in this file makes a
+   network request, so being offline changes nothing about how it works;
+   the chip simply says so, for people working somewhere with no signal. */
+function updateNet(){
+  const pill=$('#netPill'); if(!pill) return;
+  pill.hidden = navigator.onLine!==false;
+  $('#netState').textContent=t('offline');
+  pill.title = currentLang==='fr' ? 'Aucune connexion pour le moment. Tout fonctionne quand même et reste sur cet appareil.' : 'No connection right now. Everything still works and stays on this device.';
+}
+addEventListener('online',updateNet); addEventListener('offline',updateNet);
+
+/* ================== gentle rate limiting ==================
+   Prevents an accidental rapid double-click from double-submitting an
+   entry (duplicate evidence, duplicate experiment, and so on). Applies
+   globally through one capture-phase listener rather than editing every
+   handler individually -- add a class of "no-guard" to any future button
+   that should be exempt (none currently need to be). */
+const _rateBusy=new WeakSet();
+document.addEventListener('click',e=>{
+  const b=e.target.closest('button.btn'); // .iconbtn (search/theme/language) is a quick toggle, not a data-adding action -- left unguarded on purpose
+  if(!b||b.classList.contains('no-guard')) return;
+  if(_rateBusy.has(b)){ e.stopImmediatePropagation(); e.preventDefault(); return; }
+  _rateBusy.add(b); setTimeout(()=>_rateBusy.delete(b),450);
+},true);
+
+/* ================== [SPLASH] ==================
+   See the #splash CSS rules for the full behaviour description. This
+   function only ever removes the element -- sooner if the visitor acts,
+   otherwise after a short timeout -- and never blocks anything else on
+   the page from loading or running underneath it. */
+function initSplash(){
+  const el=$('#splash'); if(!el) return;
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches){ el.remove(); return; }
+  let done=false;
+  function dismiss(){ if(done) return; done=true; el.classList.add('hide'); setTimeout(()=>el.remove(),550); cleanup(); }
+  const timer=setTimeout(dismiss,1400);
+  function onSkip(){ clearTimeout(timer); dismiss(); }
+  function cleanup(){ removeEventListener('keydown',onSkip); removeEventListener('pointerdown',onSkip); removeEventListener('wheel',onSkip); }
+  addEventListener('keydown',onSkip,{once:true});
+  addEventListener('pointerdown',onSkip,{once:true});
+  addEventListener('wheel',onSkip,{once:true,passive:true});
+}
+
+/* ================== [PARALLAX-INTRO] ==================
+   Sets the --p custom property (used by the .beat-bg CSS rule) only
+   while a beat is actually on screen, via IntersectionObserver, so this
+   costs nothing for the other 90% of the page. Does nothing at all
+   under prefers-reduced-motion -- the CSS default of --p:0 then simply
+   holds, and the section reads as a normal static block. */
+function initParallax(){
+  const beats=$$('.intro-beat'); if(!beats.length) return;
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const active=new Set(); let ticking=false;
+  const io=new IntersectionObserver(entries=>{
+    entries.forEach(en=>{ en.isIntersecting?active.add(en.target):active.delete(en.target); });
+    if(active.size&&!ticking){ ticking=true; requestAnimationFrame(update); }
+  },{rootMargin:'20% 0px 20% 0px'});
+  beats.forEach(b=>io.observe(b));
+  function update(){
+    ticking=false;
+    active.forEach(b=>{
+      const r=b.getBoundingClientRect();
+      const mid=r.top+r.height/2-innerHeight/2;
+      const p=Math.max(-1,Math.min(1,mid/(innerHeight/2)));
+      b.style.setProperty('--p',p.toFixed(3));
+    });
+  }
+  addEventListener('scroll',()=>{ if(active.size&&!ticking){ ticking=true; requestAnimationFrame(update);} },{passive:true});
+  addEventListener('resize',()=>{ if(active.size&&!ticking){ ticking=true; requestAnimationFrame(update);} });
+}
+
+/* ================== [SCRIPT: STARS] constellation ==================
+   Nine pillars, one per meaningful part of the invention record. Each
+   score() function is a pure read of `state`, 0 to 1. To add a tenth
+   pillar: add one entry here (with an x/y position inside the 260x160
+   viewBox) and, optionally, insert its id into CONSTELLATION_PATH to
+   draw a connecting line. Nothing about the markup needs to change. */
+const PILLARS=[
+ {id:'problem',sel:'#problem',x:36,y:46,label:'Problem Lab',labelFr:'Laboratoire du problème',
+  score:s=>[s.problem.statement,s.problem.user,s.problem.outcome,s.problem.hardConstraints].filter(Boolean).length/4},
+ {id:'ideas',sel:'#foundry',x:92,y:24,label:'Idea Foundry',labelFr:'Fonderie d’idées',
+  score:s=>Math.min(s.ideas.length,8)/8},
+ // Not row-count based: morphology always ships with three pre-filled EXAMPLE
+ // rows (see ensureMorphRows()) so the user has a format to edit from, and
+ // those would otherwise score as "complete" on a blank project. Generating
+ // configurations at least once is a far more honest signal of engagement.
+ {id:'morphology',sel:'#morphology',x:150,y:34,label:'Morphology',labelFr:'Morphologie',
+  score:s=>s.milestones.morphology?1:0},
+ {id:'concept',sel:'#concept',x:200,y:58,label:'Concept Spec',labelFr:'Cahier des charges',
+  score:s=>[s.concept.summary,s.concept.function,s.concept.mechanism,s.concept.mvpProof].filter(Boolean).length/4},
+ {id:'experiment',sel:'#experiment',x:228,y:100,label:'Experiment Studio',labelFr:'Atelier d’expériences',
+  score:s=>Math.min(s.experiments.length,4)/4},
+ {id:'safety',sel:'#safety',x:190,y:132,label:'Safety + Stewardship',labelFr:'Sécurité et intendance',
+  score:s=>Object.values(s.safety.checks).filter(Boolean).length/9},
+ {id:'evidence',sel:'#evidence',x:130,y:144,label:'Evidence Ledger',labelFr:'Registre des preuves',
+  score:s=>Math.min(s.evidence.length,5)/5},
+ {id:'priorart',sel:'#priorart',x:74,y:128,label:'Prior Art',labelFr:'Art antérieur',
+  score:s=>[s.prior.closest,s.prior.distinctions].filter(Boolean).length/2},
+ {id:'roadmap',sel:'#roadmap',x:30,y:96,label:'Roadmap',labelFr:'Feuille de route',
+  score:s=>Math.min(Object.values(s.roadmap).filter(Boolean).length,8)/8}
+];
+const CONSTELLATION_PATH=['problem','ideas','morphology','concept','experiment','safety','evidence','priorart','roadmap'];
+
+function renderConstellation(){
+  const svg=$('#constellation'); if(!svg) return;
+  const scores={}; PILLARS.forEach(p=>{ scores[p.id]=Math.max(0,Math.min(1,p.score(state)||0)); });
+  let html='';
+  for(let i=0;i<CONSTELLATION_PATH.length-1;i++){
+    const a=PILLARS.find(p=>p.id===CONSTELLATION_PATH[i]), b=PILLARS.find(p=>p.id===CONSTELLATION_PATH[i+1]);
+    const op=(0.08+0.4*Math.min(scores[a.id],scores[b.id])).toFixed(2);
+    html+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="var(--accent)" stroke-opacity="${op}" stroke-width="1"></line>`;
+  }
+  PILLARS.forEach(p=>{
+    const f=scores[p.id], r=(3+5*f).toFixed(1), op=(0.35+0.55*f).toFixed(2);
+    const label=(currentLang==='fr'&&p.labelFr)?p.labelFr:p.label;
+    html+=`<a href="${p.sel}"><title>${esc(label)} — ${Math.round(f*100)}%</title><circle cx="${p.x}" cy="${p.y}" r="${(r*2.2).toFixed(1)}" fill="var(--accent)" opacity="0.10"></circle><circle cx="${p.x}" cy="${p.y}" r="${r}" fill="var(--accent)" opacity="${op}"></circle></a>`;
+  });
+  svg.innerHTML=html;
+  const litCount=Object.values(scores).filter(v=>v>0.15).length;
+  $('#constellationHint').textContent=`${litCount}/${PILLARS.length} ${t('starsLit')}`;
+}
+function initConstellation(){
+  const svg=$('#constellation'); if(!svg) return;
+  svg.addEventListener('click',e=>{
+    const a=e.target.closest('a'); if(!a) return;
+    e.preventDefault();
+    const el=$(a.getAttribute('href')); if(el) el.scrollIntoView({behavior:'smooth'});
+  });
+}
+
+/* ================== [SCRIPT: HUD] milestone badges ==================
+   Encouragement only, per the zero-harm note at the top of this file:
+   nothing here decays, nothing compares one person to another, and
+   nothing is required to use the rest of the tool. Each test() is a
+   pure function of `state` -- to add a badge, add one entry; no markup
+   changes needed. earnedCache/primeEarnedCache() exist purely so a
+   returning visitor isn't re-congratulated for badges they already had
+   the moment the page loads -- see the calls to primeEarnedCache() in
+   renderAll() and in the import/reset/new-project handlers above. */
+const MILESTONES=[
+ {id:'framed',name:{en:'Problem framed',fr:'Problème cadré'},hint:'Name the invention and describe who experiences the problem, where, and under what conditions.',test:s=>!!(s.project.name&&s.problem.statement&&s.problem.user)},
+ {id:'reframed',name:{en:'Reframed it',fr:'Reformulé'},hint:'Generate at least one set of reframes in the Problem Lab.',test:s=>!!s.milestones.reframed},
+ {id:'contradiction',name:{en:'Resolved a contradiction',fr:'Contradiction résolue'},hint:'Use the contradiction explorer in the Idea Foundry.',test:s=>!!s.milestones.contradiction},
+ {id:'ideas',name:{en:'Idea generator',fr:'Générateur d’idées'},hint:'Deal a hand of innovation lenses.',test:s=>s.ideas.length>0},
+ {id:'morphology',name:{en:'Mapped the design space',fr:'Espace de conception exploré'},hint:'Generate configurations in Morphology.',test:s=>!!s.milestones.morphology},
+ {id:'mvp',name:{en:'Defined an MVP',fr:'Preuve minimale définie'},hint:'Describe the smallest test of your core mechanism in Concept Spec.',test:s=>!!s.concept.mvpProof},
+ {id:'experiment',name:{en:'First experiment',fr:'Première expérience'},hint:'Log a falsifiable experiment.',test:s=>s.experiments.length>0},
+ {id:'steward',name:{en:'Safety steward',fr:'Gardien de la sécurité'},hint:'Work through every item in the zero-harm gate.',test:s=>Object.values(s.safety.checks).filter(Boolean).length>=9},
+ {id:'evidence3',name:{en:'Evidence collector',fr:'Collecteur de preuves'},hint:'Log three pieces of evidence.',test:s=>s.evidence.length>=3},
+ {id:'priorart',name:{en:'Prior-art scout',fr:'Éclaireur de l’art antérieur'},hint:'Build a set of prior-art search queries.',test:s=>!!s.milestones.priorart},
+ {id:'roadmap',name:{en:'On the roadmap',fr:'Sur la feuille de route'},hint:'Mark one roadmap stage complete.',test:s=>Object.values(s.roadmap).some(Boolean)},
+ {id:'dossier',name:{en:'Dossier compiled',fr:'Dossier compilé'},hint:'Build the invention dossier at least once.',test:s=>!!s.milestones.dossier}
+];
+function milestoneName(m){ return (currentLang==='fr'&&m.name.fr)?m.name.fr:m.name.en; }
+function hudStageName(m){ return t(m<20?'stage0':m<40?'stage1':m<60?'stage2':m<80?'stage3':'stage4'); }
+let earnedCache=new Set();
+function primeEarnedCache(){ earnedCache=new Set(MILESTONES.filter(m=>m.test(state)).map(m=>m.id)); }
+function renderBadges(){
+  const tray=$('#badgeTray'); if(!tray) return;
+  const now=new Set(); let html='';
+  MILESTONES.forEach(m=>{
+    const on=m.test(state); if(on) now.add(m.id);
+    const name=milestoneName(m);
+    const statusWord=currentLang==='fr' ? (on?'obtenu':'pas encore obtenu') : (on?'earned':'not yet earned');
+    html+=`<span class="pip ${on?'on':''}" role="listitem" title="${esc(name)}${on?'':' — '+esc(m.hint)}"><span aria-hidden="true">${on?'★':'☆'}</span><span class="sr-only">${esc(name)} — ${statusWord}</span></span>`;
+  });
+  tray.innerHTML=html;
+  $('#badgeCount').textContent=`${now.size}/${MILESTONES.length}`;
+  now.forEach(id=>{
+    if(!earnedCache.has(id)){
+      const m=MILESTONES.find(x=>x.id===id);
+      toast(`${currentLang==='fr'?'Étape franchie :':'Milestone unlocked:'} ${milestoneName(m)}`);
+    }
+  });
+  earnedCache=now;
+}
+
+/* ================== [SCRIPT: INSIGHTS] ==================
+   Off by default. Counts, only in this browser: how many times each
+   section has been opened (once per section per page load, via the
+   IntersectionObserver hook above), a rough active-time heartbeat, and a
+   session count. No code path in this file sends any of it anywhere --
+   see the Attributions note in the footer. */
+function sectionTitle(id){
+  const a=$(`.navlink[href="#${id}"]`); if(!a) return id;
+  const num=a.querySelector('.num');
+  const full=a.textContent.trim();
+  return num ? full.slice(num.textContent.length).trim() : full;
+}
+function renderInsights(){
+  const box=$('#insightsSummary'); if(!box) return;
+  const toggle=$('#insightsToggle'); if(toggle) toggle.checked=!!state.insights.enabled;
+  if(!state.insights.enabled){ box.textContent = currentLang==='fr' ? 'Les statistiques sont actuellement désactivées.' : 'Insights are currently off.'; return; }
+  const opened=Object.keys(state.insights.sectionViews).length;
+  const top=Object.entries(state.insights.sectionViews).sort((a,b)=>b[1]-a[1])[0];
+  const mins=Math.round(state.insights.activeMs/60000);
+  const n=state.insights.sessionsCount;
+  box.textContent = currentLang==='fr'
+    ? `${n} session${n===1?'':'s'} • ${opened} section${opened===1?'':'s'} ouverte${opened===1?'':'s'}${top?` • la plus consultée : ${sectionTitle(top[0])}`:''} • environ ${mins} minute${mins===1?'':'s'} active${mins===1?'':'s'} dans ce navigateur.`
+    : `${n} session${n===1?'':'s'} • ${opened} section${opened===1?'':'s'} opened${top?` • most opened: ${sectionTitle(top[0])}`:''} • roughly ${mins} active minute${mins===1?'':'s'} in this browser.`;
+}
+$('#insightsToggle').onchange=e=>{
+  state.insights.enabled=e.target.checked; debounceSave(); renderInsights();
+  toast(e.target.checked ? (currentLang==='fr'?'Statistiques locales activées':'Local insights turned on') : (currentLang==='fr'?'Statistiques locales désactivées':'Local insights turned off'));
+};
+$('#insightsClear').onclick=()=>{
+  state.insights={enabled:state.insights.enabled,sectionViews:{},sessionsCount:0,activeMs:0};
+  debounceSave(); renderInsights();
+  toast(currentLang==='fr'?'Statistiques effacées':'Insights cleared');
+};
+setInterval(()=>{ if(state.insights.enabled && document.visibilityState==='visible'){ state.insights.activeMs+=30000; debounceSave(); renderInsights(); } },30000);
+
+async function init(){
+  const saved=await DB.get(); if(saved) state=Object.assign(structuredClone(DEFAULT_STATE),saved);
+  const pref=lsGet('if-theme');if(pref&&!saved?.ui?.theme)state.ui.theme=pref;
+  if(state.insights.enabled){ state.insights.sessionsCount+=1; debounceSave(); }
+  renderAll(); // also primes the milestone-badge cache before its own first render pass, see renderAll() above
+  initStars();
+  initSplash();
+  initParallax();
+  initConstellation();
+}
+init();
+})();
+</script>
+</body>
+</html>
